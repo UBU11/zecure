@@ -1,4 +1,3 @@
-import { error } from "console";
 import mqtt from "mqtt";
 
 const protocol = "mqtt";
@@ -20,16 +19,26 @@ const client = mqtt.connect(connectUrl, {
 client.on("connect", () => {
   console.log("Connected");
 
-  client.subscribe("/node/mqtt", () => {
-    client.publish(
-      "node/mqtt",
-      "mqtt initial test",
-      { qos: 0, retain: false },
-      (error) => {
-        if (error) {
-          console.error(error);
-        }
-      },
-    );
+  client.subscribe("node", (error) => {
+    if (!error) {
+      client.publish(
+        "node",
+
+        "mqtt initial test",
+
+        { qos: 0, retain: false },
+
+        (error) => {
+          if (error) {
+            console.error(error);
+          }
+        },
+      );
+    }
   });
+});
+
+client.on("message", (topic, message) => {
+  console.log(message.toString());
+  client.end;
 });
