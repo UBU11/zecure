@@ -2,7 +2,7 @@ import mqtt from "mqtt";
 
 const clientId = `mqtt_${Math.random().toString(16).slice(3)}`;
 
-const connectUrl = `ws://localhost:1883/mqtt`;
+const connectUrl = `ws://localhost:8084/mqtt`;
 
 const topic = 'node/socket'
 
