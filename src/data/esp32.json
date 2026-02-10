@@ -1,0 +1,32 @@
+[
+  {
+    "device_id": "esp32-room-01",
+    "voltage": 229.96,
+    "power": 180.03,
+    "timestamp": 1770712201199
+  },
+  {
+    "device_id": "esp32-room-01",
+    "voltage": 220.02,
+    "power": 166.97,
+    "timestamp": 1770712201199
+  },
+  {
+    "device_id": "esp32-room-01",
+    "voltage": 235.1,
+    "power": 160.79,
+    "timestamp": 1770712201199
+  },
+  {
+    "device_id": "esp32-room-01",
+    "voltage": 235.11,
+    "power": 165.42,
+    "timestamp": 1770712201199
+  },
+  {
+    "device_id": "esp32-room-01",
+    "voltage": 230.8,
+    "power": 168.45,
+    "timestamp": 1770712201199
+  }
+]
