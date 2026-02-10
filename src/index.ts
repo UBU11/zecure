@@ -20,25 +20,24 @@ client.on("connect", () => {
   console.log("Connected");
 
   client.subscribe("node", (error) => {
-    if (!error) {
-      client.publish(
-        "node",
-
-        "mqtt initial test",
-
-        { qos: 0, retain: false },
-
-        (error) => {
-          if (error) {
-            console.error(error);
-          }
-        },
-      );
+    if (error) {
+      console.error("Subcribe error: ", error);
     }
+
+    client.publish(
+      "node",
+      "Hello MQTT Client",
+      { qos: 1, retain: false },
+      (err) => {
+        if (err) {
+          console.error("publish error: ", err);
+        }
+      },
+    );
   });
 });
 
 client.on("message", (topic, message) => {
-  console.log(message.toString());
+  console.log("Message: ", message.toString());
   client.end;
 });

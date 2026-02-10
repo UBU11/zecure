@@ -1,7 +1,0 @@
-{
-  "version":1.0,
-  "voltage":1,
-  "power":1,
-  "current": 1,
-  "AES-KEY": "esp32 generated key"
-}
