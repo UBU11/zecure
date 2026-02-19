@@ -1,11 +1,16 @@
 import mqtt from "mqtt";
+import fs from "fs";
+import path from "path";
 
 const protocol = "mqtt";
 const host = "localhost";
 const port = "1883";
 const clientId = `mqtt_${Math.random().toString(16).slice(3)}`;
-
 const connectUrl = `${protocol}://${host}:${port}`;
+
+const encodedFile = fs.readFileSync(path.resolve(__dirname, "../data/esp32.json.enc"), "utf8");
+
+
 
 const client = mqtt.connect(connectUrl, {
   clientId,
@@ -19,14 +24,9 @@ const client = mqtt.connect(connectUrl, {
 client.on("connect", () => {
   console.log("Connected");
 
-  client.subscribe("node", (error) => {
-    if (error) {
-      console.error("Subcribe error: ", error);
-    }
-
     client.publish(
-      "node",
-      "Hello MQTT Client",
+      "esp32/data",
+      encodedFile,
       { qos: 1, retain: false },
       (err) => {
         if (err) {
@@ -34,7 +34,6 @@ client.on("connect", () => {
         }
       },
     );
-  });
 });
 
 client.on("message", (topic, message) => {

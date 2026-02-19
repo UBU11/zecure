@@ -2,7 +2,7 @@ import mqtt from "mqtt";
 
 const clientId = `mqtt_${Math.random().toString(16).slice(3)}`;
 
-const connectUrl = `ws://localhost:8084/mqtt`;
+const connectUrl = `ws://localhost:8083`;
 
 const topic = 'node/socket'
 
@@ -12,7 +12,7 @@ const wsClient = mqtt.connect(connectUrl, {
   clean: true,
   connectTimeout: 4000,
   username: "ws service",
-  reconnectPeriod: 10000,
+  reconnectPeriod: 1000,
 });
 
 
@@ -36,10 +36,6 @@ wsClient.on('message', (topic, message)=> {
 wsClient.on('error', (error) => {
     console.log('Error: ', error);
 });
-
-wsClient.on('packetreceive', packet =>{
-  console.log('packet send ....', packet)
-})
 
 wsClient.on('reconnect',()=>{
    console.log('Reconnecting')
