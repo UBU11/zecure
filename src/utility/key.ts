@@ -24,9 +24,12 @@ const EncryptedKey = crypto.publicEncrypt({
   oaepHash: 'sha256',
 }, key)
 
+const esp32 = fs.readFileSync(path.resolve(__dirname, "../data/esp32.json"), "utf8");
+
 const dataPath = path.resolve(__dirname, "../data/esp32.json");
 
 async function encryptJsonFile(inputFile: string, outputFile: string) {
+
   try {
     const plainText = fs.readFileSync(inputFile, "utf8");
 
@@ -87,6 +90,6 @@ async function decryptFile(inputFile: string, outputFile: string) {
 }
 
 // encryptJsonFile(dataPath, dataPath + ".enc");
-decryptFile(dataPath + ".enc", dataPath);
+// decryptFile(dataPath + ".enc", dataPath);
 
 export { encryptJsonFile, decryptFile };

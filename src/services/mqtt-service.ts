@@ -40,3 +40,8 @@ client.on("message", (topic, message) => {
   console.log("Message: ", message.toString());
   client.end;
 });
+
+client.on('error', (err)=>{
+  console.log('mqtt error: ',err)
+  client.reconnect()
+})
