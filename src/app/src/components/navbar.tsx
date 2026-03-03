@@ -60,7 +60,7 @@ export const StaggeredMenu: React.FC<StaggeredMenuProps> = ({
 
   const textInnerRef = useRef<HTMLSpanElement | null>(null);
   const textWrapRef = useRef<HTMLSpanElement | null>(null);
-  const [textLines, setTextLines] = useState<string[]>(['Menu', 'Close']);
+  const [textLines, setTextLines] = useState<string[]>(['', '']);
 
   const openTlRef = useRef<gsap.core.Timeline | null>(null);
   const closeTweenRef = useRef<gsap.core.Tween | null>(null);
@@ -302,8 +302,8 @@ export const StaggeredMenu: React.FC<StaggeredMenuProps> = ({
 
     textCycleAnimRef.current?.kill();
 
-    const currentLabel = opening ? 'Menu' : 'Close';
-    const targetLabel = opening ? 'Close' : 'Menu';
+    const currentLabel = opening ? '' : '';
+    const targetLabel = opening ? '' : '';
     const cycles = 3;
 
     const seq: string[] = [currentLabel];

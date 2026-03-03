@@ -4,58 +4,78 @@ import path from "path";
 import "dotenv/config";
 
 
+const private_key = fs.readFileSync(path.resolve(__dirname, "../../cert/private_key.pem"), 'utf8');
+
 const algorithm = "aes-256-gcm";
-const public_key = fs.readFileSync(path.resolve(__dirname, "../../cert/public_key.pem"),'utf8')
 
 
-const secretKeyHex = process.env.SECRET_KEY;
-if (!secretKeyHex) {
-  throw new Error("SECRET_KEY environment variable is not defined");
+function decryptPayload(payloadStr: string): string {
+  try {
+    const { EncryptedKey, iv, authTag, cipherText } = JSON.parse(payloadStr);
+
+    if (!EncryptedKey || !iv || !authTag || !cipherText) {
+      throw new Error("Missing required encryption fields in payload");
+    }
+
+    
+    const decryptedKey = crypto.privateDecrypt(
+      {
+        key: private_key,
+        padding: crypto.constants.RSA_PKCS1_OAEP_PADDING,
+        oaepHash: 'sha256',
+      },
+      Buffer.from(EncryptedKey, 'hex')
+    );
+
+    const decipher = crypto.createDecipheriv(
+      algorithm,
+      decryptedKey,
+      Buffer.from(iv, 'hex')
+    );
+    
+    decipher.setAuthTag(Buffer.from(authTag, 'hex'));
+
+    let decrypted = decipher.update(cipherText, "hex", "utf8");
+    decrypted += decipher.final("utf8");
+
+    return decrypted;
+  } catch (error) {
+    console.error("Payload decryption error:", error);
+    throw error;
+  }
 }
-
-const key = Buffer.from(secretKeyHex, "hex");
-if (key.length !== 32) {
-  throw new Error("SECRET_KEY must be 32 bytes (64 hex characters)");
-}
-
-const EncryptedKey = crypto.publicEncrypt({
-  key: public_key,
-  padding: crypto.constants.RSA_PKCS1_OAEP_PADDING,
-  oaepHash: 'sha256',
-}, key)
-
-const esp32 = fs.readFileSync(path.resolve(__dirname, "../data/esp32.json"), "utf8");
-
-const dataPath = path.resolve(__dirname, "../data/esp32.json");
 
 async function encryptJsonFile(inputFile: string, outputFile: string) {
-
   try {
     const plainText = fs.readFileSync(inputFile, "utf8");
+    const secretKeyHex = process.env.SECRET_KEY;
+    if (!secretKeyHex) throw new Error("SECRET_KEY not in .env");
+    const key = Buffer.from(secretKeyHex, "hex");
 
     const iv = crypto.randomBytes(12);
-
     const cipher = crypto.createCipheriv(algorithm, key, iv);
 
     let cipherText = cipher.update(plainText, "utf8", "hex");
     cipherText += cipher.final("hex");
-
     const authTag = cipher.getAuthTag().toString("hex");
 
+    const public_key = fs.readFileSync(path.resolve(__dirname, "../../cert/public_key.pem"),'utf8');
+    const rsaEncryptedKey = crypto.publicEncrypt({
+      key: public_key,
+      padding: crypto.constants.RSA_PKCS1_OAEP_PADDING,
+      oaepHash: 'sha256',
+    }, key);
 
     const payload = JSON.stringify({
-      EncryptedKey: EncryptedKey.toString("hex"),
+      EncryptedKey: rsaEncryptedKey.toString("hex"),
       iv: iv.toString("hex"),
       authTag,
       cipherText,
-    })
+    });
 
     fs.writeFileSync(outputFile, payload);
     console.log(`Successfully encrypted data to ${outputFile}`);
   } catch (error) {
-    if ((error as any).code === "ENOENT") {
-      console.log("File not found");
-    }
     console.error(error);
   }
 }
@@ -63,33 +83,12 @@ async function encryptJsonFile(inputFile: string, outputFile: string) {
 async function decryptFile(inputFile: string, outputFile: string) {
   try {
     const fileContent = fs.readFileSync(inputFile, "utf8");
-    let {iv, authTag, cipherText} = JSON.parse(fileContent)
-
-    if(!iv || !authTag || !cipherText){
-      throw new Error("Invalid encrypted file format. Expected IV:AuthTag:EncryptedData")
-    }
-
-     iv = Buffer.from(iv, "hex");
-     authTag = Buffer.from(authTag, "hex");
-     cipherText = cipherText;
-
-    const decipher = crypto.createDecipheriv(algorithm, key, iv);
-    decipher.setAuthTag(authTag);
-
-    let decrypted = decipher.update(cipherText, "hex", "utf8");
-    decrypted += decipher.final("utf8");
-
+    const decrypted = decryptPayload(fileContent);
     fs.writeFileSync(outputFile, decrypted);
     console.log(`Successfully decrypted data to ${outputFile}`);
   } catch (error) {
-    if ((error as any).code === "ENOENT") {
-      console.log("File not found");
-    }
-    console.error(error);
+    console.error("File decryption error:", error);
   }
 }
 
-// encryptJsonFile(dataPath, dataPath + ".enc");
-// decryptFile(dataPath + ".enc", dataPath);
-
-export { encryptJsonFile, decryptFile };
+export { encryptJsonFile, decryptFile, decryptPayload };

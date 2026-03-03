@@ -1,13 +1,16 @@
+import { useNavigate } from "react-router-dom";
 import FloatingLines from "../components/background";
 import TargetCursor from "../components/heroText";
 import StaggeredMenu from "../components/navbar";
 import RotatingText from "../components/textAnimation";
+import { motion } from "motion/react";
 
 function Hero() {
+  const navigate = useNavigate();
   const menuItems = [
     { label: "Home", ariaLabel: "Go to home page", link: "/" },
-    { label: "About", ariaLabel: "Learn about us", link: "/about" },
-    { label: "Team", ariaLabel: "View our team", link: "/team" },
+    { label: "Dashboard", ariaLabel: "View your energy dashboard", link: "/dashboard" },
+    { label: "Services", ariaLabel: "Our services", link: "/services" },
   ];
 
   const socialItems = [
@@ -17,8 +20,8 @@ function Hero() {
   ];
 
   return (
-    <>
-      <div className=" w-full h-screen relative">
+    <div className="bg-[#030014] min-h-screen overflow-hidden relative">
+      <div className="w-full h-screen relative">
         <FloatingLines
           enabledWaves={["top", "middle", "bottom"]}
           lineCount={5}
@@ -30,7 +33,7 @@ function Hero() {
         />
       </div>
 
-      <div className="absolute top-0 left-0 w-full h-full z-50">
+      <div className="absolute top-0 left-0 w-full h-full z-100 pointer-events-none">
         <StaggeredMenu
           position="right"
           items={menuItems}
@@ -43,8 +46,6 @@ function Hero() {
           colors={["#B19EEF", "#5227FF"]}
           logoUrl="/path-to-your-logo.svg"
           accentColor="#5227FF"
-          onMenuOpen={() => console.log("Menu opened")}
-          onMenuClose={() => console.log("Menu closed")}
         />
       </div>
 
@@ -55,26 +56,49 @@ function Hero() {
         hoverDuration={0.2}
       />
 
-      <div className="absolute top-10 left-100 w-200 h-200 z-50 text-white flex flex-col items-center justify-center">
-        <div className="flex">
-        <h1 className="text-4xl font-bold">Zecure</h1>
-        <RotatingText
-          texts={["Fully E2EE", "Data Pipeline", "Is Secure!"]}
-          mainClassName="px-2 sm:px-2 md:px-3 bg-blue-500 text-black overflow-hidden py-0.5 sm:py-1 md:py-2 justify-center rounded-lg"
-          staggerFrom={"last"}
-          initial={{ y: "100%" }}
-          animate={{ y: 0 }}
-          exit={{ y: "-120%" }}
-          staggerDuration={0.025}
-          splitLevelClassName="overflow-hidden pb-0.5 sm:pb-1 md:pb-1"
-          transition={{ type: "spring", damping: 30, stiffness: 400 }}
-          rotationInterval={2000}
-        />
-        </div>
-        <button className="cursor-target">FullY Data E2EE Pipeline </button>
-        <div className="cursor-target">About</div>
+      <div className="absolute inset-0 z-60 flex flex-col items-center justify-center pointer-events-none">
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex flex-col items-center pointer-events-auto"
+        >
+          <div className="flex items-center gap-4 mb-6">
+            <h1 className="text-6xl md:text-8xl font-black tracking-tighter text-white">ZECURE</h1>
+            <RotatingText
+              texts={["SMART", "SECURE", "SAVVY"]}
+              mainClassName="px-4 py-2 bg-purple-600 text-white overflow-hidden justify-center rounded-xl text-2xl font-bold"
+              staggerFrom={"last"}
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "-120%" }}
+              staggerDuration={0.025}
+              splitLevelClassName="overflow-hidden"
+              transition={{ type: "spring", damping: 30, stiffness: 400 }}
+              rotationInterval={2500}
+            />
+          </div>
+          
+          <p className=" text-xl md:text-2xl max-w-2xl text-center mb-10 font-medium text-white">
+            The next generation of energy management. <span className="cursor-target">Monitor</span>, <span className="cursor-target">Analyze</span> & <span className="cursor-target">Optimize</span> your consumption with ease
+          </p>
+
+          <div className="flex gap-6">
+            <button 
+              onClick={() => navigate('/dashboard')}
+              className="px-8 py-4 bg-white text-black font-bold rounded-2xl flex items-center gap-2 hover:bg-slate-200 transition-all hover:scale-105 premium-shadow cursor-pointer"
+            >
+              Get Started
+            </button>
+            <button 
+              onClick={() => navigate('/sign-in')}
+              className="px-8 py-4 bg-transparent border border-white/20 text-white font-bold rounded-2xl hover:bg-white/5 transition-all cursor-pointer"
+            >
+              Sign In
+            </button>
+          </div>
+        </motion.div>
       </div>
-    </>
+    </div>
   );
 }
 

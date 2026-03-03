@@ -1,6 +1,7 @@
 import mqtt from "mqtt";
 import { createClient } from "@supabase/supabase-js";
 import "dotenv/config";
+import { decryptPayload } from "../utility/key";
 
 const protocol = "mqtt";
 const host = "localhost";
@@ -20,23 +21,65 @@ if(!supabaseKey){
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 const uploadFile = async (payload: string) => {
-  const fileName = `data_${Date.now()}.json`;
-  const { data, error } = await supabase.storage
+  let finalData: string = payload;
+  let isEncrypted = false;
+
+  try {
+    const parsed = JSON.parse(payload);
+    if (parsed.EncryptedKey && parsed.iv && parsed.authTag) {
+      console.log("Detected encrypted payload, decrypting...");
+      finalData = decryptPayload(payload);
+      isEncrypted = true;
+    }
+  } catch (e:any) {
+    console.error("Failed to parse payload:", e.message);
+  }
+
+  const fileName = `data_${Date.now()}${isEncrypted ? '_decrypted' : ''}.json`;
+  const { data: storageData, error: storageError } = await supabase.storage
     .from("FIle Bucket")
-    .upload(fileName, payload, {
+    .upload(fileName, finalData, {
       cacheControl: "3600",
       contentType: "application/json",
       upsert: true,
     });
 
-
-  if (error) {
-    console.error("Upload error:", error);
-    return null;
+  if (storageError) {
+    console.error("Storage upload error:", storageError);
+  } else {
+    console.log("Storage upload successful:", storageData.path);
   }
 
-  console.log("File uploaded successfully:", data.path);
-  return data;
+
+  if (isEncrypted) {
+    try {
+      const parsed = JSON.parse(finalData);
+      const rows = Array.isArray(parsed) ? parsed : [parsed];
+      
+      const insertData = rows.map(item => ({
+        device_id: item.device_id,
+        voltage: item.voltage,
+        current: item.current,
+        power: item.power,
+        power_factor: item.power_factor,
+        recorded_at: item.timestamp ? new Date(item.timestamp).toISOString() : new Date().toISOString(),
+      }));
+
+      const { error: dbError } = await supabase
+        .from("meter_readings")
+        .insert(insertData);
+      
+      if (dbError) {
+        console.warn("Database insert failed:", dbError.message);
+      } else {
+        console.log(`Database record(s) inserted successfully: ${insertData.length} row(s)`);
+      }
+    } catch (e) {
+      console.error("Failed to parse or insert decrypted data:", e);
+    }
+  }
+
+  return storageData;
 };
 
 const client = mqtt.connect(connectUrl, {

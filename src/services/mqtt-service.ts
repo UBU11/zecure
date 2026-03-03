@@ -21,20 +21,27 @@ const client = mqtt.connect(connectUrl, {
   reconnectPeriod: 1000,
 });
 
+const topic = "esp32/data"
+
 const publishData = () => {
-  console.log("Publishing data to MQTT...");
-  client.publish(
-    "esp32/data",
-    encodedFile,
-    { qos: 1, retain: false },
-    (err) => {
-      if (err) {
-        console.error("publish error: ", err);
-      } else {
-        console.log("Data published successfully at:", new Date().toISOString());
-      }
-    },
-  );
+  try {
+    const encodedFile = fs.readFileSync(path.resolve(__dirname, "../data/esp32.json.enc"), "utf8");
+    console.log("Publishing latest data to MQTT...");
+    client.publish(
+      topic,
+      encodedFile,
+      { qos: 1, retain: false },
+      (err) => {
+        if (err) {
+          console.error("publish error: ", err);
+        } else {
+          console.log("Data published successfully at:", new Date().toISOString());
+        }
+      },
+    );
+  } catch (e) {
+    console.error("Failed to read encoded file for MQTT publish:", e);
+  }
 };
 
 client.on("connect", () => {
@@ -44,7 +51,7 @@ client.on("connect", () => {
 
   setInterval(() => {
     publishData();
-  }, 3600000);
+  }, 1000);
 });
 
 client.on("message", (topic, message) => {
