@@ -1,6 +1,6 @@
 import mqtt from "mqtt";
-import fs from "fs";
-import path from "path";
+import * as fs from "fs";
+import * as path from "path";
 
 const protocol = "mqtt";
 const host = "localhost";
@@ -21,24 +21,35 @@ const client = mqtt.connect(connectUrl, {
   reconnectPeriod: 1000,
 });
 
+const publishData = () => {
+  console.log("Publishing data to MQTT...");
+  client.publish(
+    "esp32/data",
+    encodedFile,
+    { qos: 1, retain: false },
+    (err) => {
+      if (err) {
+        console.error("publish error: ", err);
+      } else {
+        console.log("Data published successfully at:", new Date().toISOString());
+      }
+    },
+  );
+};
+
 client.on("connect", () => {
   console.log("Connected");
+  
+  publishData();
 
-    client.publish(
-      "esp32/data",
-      encodedFile,
-      { qos: 1, retain: false },
-      (err) => {
-        if (err) {
-          console.error("publish error: ", err);
-        }
-      },
-    );
+  setInterval(() => {
+    publishData();
+  }, 3600000);
 });
 
 client.on("message", (topic, message) => {
-  console.log("Message: ", message.toString());
-  client.end;
+  console.log(`Received message on topic ${topic}:`, message.toString());
+
 });
 
 client.on('error', (err)=>{

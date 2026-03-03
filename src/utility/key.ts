@@ -5,7 +5,7 @@ import "dotenv/config";
 
 
 const algorithm = "aes-256-gcm";
-const public_key = fs.readFileSync(path.resolve(__dirname, "../../cert/cert.pem"),'utf8')
+const public_key = fs.readFileSync(path.resolve(__dirname, "../../cert/public_key.pem"),'utf8')
 
 
 const secretKeyHex = process.env.SECRET_KEY;
