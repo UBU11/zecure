@@ -4,7 +4,7 @@ import mqtt, { MqttClient } from "mqtt";
 import amqplib from "amqplib";
 import "dotenv/config";
 
-const MQTT_URL   = "mqtt://localhost:1883";
+const MQTT_URL   = process.env.MQTT_URL ?? "mqtt://localhost:1883";
 const MQTT_TOPIC = "esp32/data";
 const AMQP_URL   = process.env.RABBITMQ_URL ?? "amqp://localhost";
 const QUEUE_NAME = "meter_data";

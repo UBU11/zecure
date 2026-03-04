@@ -20,6 +20,7 @@ services.forEach(service => {
   const proc = Bun.spawn(["bun", service.path], {
     stdout: "inherit",
     stderr: "inherit",
+    env: process.env,
   });
   processes.push(proc);
 });
