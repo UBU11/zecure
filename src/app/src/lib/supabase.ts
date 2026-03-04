@@ -4,7 +4,7 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://spryetddjmqria
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
 if (!supabaseKey) {
-  console.error('[supabase] VITE_SUPABASE_ANON_KEY is not set — Realtime will not work!');
+  console.error('[supabase] VITE_SUPABASE_ANON_KEY is not set | Realtime will not work!');
 }
 
 export const supabase = createClient(supabaseUrl, supabaseKey, {

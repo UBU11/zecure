@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { supabase } from './supabase';
 
 let realtimeStarted = false;
+const DEMO_MULTIPLIER = 200;
 
 interface ConsumptionData {
   label: string;
@@ -15,12 +16,15 @@ interface EnergyState {
   currentBill: number;
   totalConsumption: number; 
   projectedBill: number;
+  userId: string | null;
   currency: string;
   isLive: boolean;
   lastUpdated: Date | null;
 
+  setUserId: (id: string) => void;
   refreshData: () => Promise<void>;
   startRealtime: () => void;
+  persistToSupabase: (bill: number, usage: number, projected: number) => Promise<void>;
 }
 
 const generateInitialData = (count: number, prefix: string) => {
@@ -37,29 +41,51 @@ export const useEnergyStore = create<EnergyState>((set) => ({
   currentBill: 0,
   totalConsumption: 0,
   projectedBill: 0,
+  userId: null,
   currency: "₹",
   isLive: false,
   lastUpdated: null,
 
+  setUserId: (id: string) => set({ userId: id }),
+
   refreshData: async () => {
-    const { data, error } = await supabase
+    const { userId } = useEnergyStore.getState();
+    
+    if (userId) {
+      const { data: dashboardData } = await supabase
+        .from('user_dashboard')
+        .select('*')
+        .eq('user_id', userId)
+        .single();
+        
+      if (dashboardData) {
+        console.log('[energyStore] Loaded persisted dashboard:', dashboardData);
+        set({
+          currentBill: dashboardData.current_bill || 0,
+          totalConsumption: dashboardData.total_usage || 0,
+          projectedBill: dashboardData.projected_bill || 0
+        });
+      } else {
+        console.log('[energyStore] No persisted dashboard found for user:', userId);
+      }
+    }
+
+  
+    const { data: readings, error } = await supabase
       .from('meter_readings')
       .select('*')
       .order('recorded_at', { ascending: false })
       .limit(1000);
 
-    if (data && !error) {
-   
+    if (readings && !error) {
       const hourlyMap = new Map<string, number>();
       const dailyMap = new Map<string, number>();
       
-      data.forEach(r => {
+      readings.forEach(r => {
         const date = new Date(r.recorded_at);
         const hourKey = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }).replace(/:[0-9]{2}/, ':00');
         const dayKey = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
-        
-   
-        const kwh = (r.power * 2) / 3600000;
+        const kwh = ((r.power * 2) / 3600000) * DEMO_MULTIPLIER;
 
         hourlyMap.set(hourKey, (hourlyMap.get(hourKey) || 0) + kwh);
         dailyMap.set(dayKey, (dailyMap.get(dayKey) || 0) + kwh);
@@ -75,15 +101,37 @@ export const useEnergyStore = create<EnergyState>((set) => ({
         value: parseFloat(value.toFixed(4))
       })).reverse().slice(-7);
 
-      const total = Array.from(dailyMap.values()).reduce((a, b) => a + b, 0);
+      const historicalSum = Array.from(dailyMap.values()).reduce((a, b) => a + b, 0);
 
-      set(state => ({ 
-        dailyUsage: daily.length > 0 ? daily : state.dailyUsage,
-        weeklyUsage: weekly.length > 0 ? weekly : state.weeklyUsage,
-        totalConsumption: total,
-        currentBill: total * 8.5,
-        projectedBill: total * 30 * 1.2
-      }));
+      set(state => {
+        const bestTotal = Math.max(state.totalConsumption, historicalSum);
+        return { 
+          dailyUsage: daily.length > 0 ? daily : state.dailyUsage,
+          weeklyUsage: weekly.length > 0 ? weekly : state.weeklyUsage,
+          totalConsumption: bestTotal,
+          currentBill: bestTotal * 12.5,
+          projectedBill: bestTotal * 31
+        };
+      });
+    }
+  },
+
+  persistToSupabase: async (currentBill: number, totalConsumption: number, projectedBill: number) => {
+    const { userId } = useEnergyStore.getState();
+    if (!userId) return;
+
+    const { error } = await supabase
+      .from('user_dashboard')
+      .upsert({
+        user_id: userId,
+        current_bill: currentBill,
+        total_usage: totalConsumption,
+        projected_bill: projectedBill,
+        last_updated: new Date().toISOString()
+      }, { onConflict: 'user_id' });
+      
+    if (error) {
+      console.error('[energyStore] Persistence error:', error.message, error.code);
     }
   },
 
@@ -105,13 +153,14 @@ export const useEnergyStore = create<EnergyState>((set) => ({
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'meter_readings' },
         (payload) => {
-          const newData = payload.new as {
-            power: number;
-            recorded_at: string;
-          };
+          const newData = payload.new as any;
+          if (!newData) return;
 
-          const power = typeof newData.power === 'number' ? newData.power : 0;
-          const kwhPulse = (power * 2) / 3600000;
+          const power = typeof newData.power === 'number' 
+            ? newData.power 
+            : parseFloat(newData.power || 0);
+            
+          const kwhPulse = ((power * 2) / 3600000) * DEMO_MULTIPLIER;
 
       
           if (!isFinite(kwhPulse) || isNaN(kwhPulse)) return;
@@ -152,15 +201,20 @@ export const useEnergyStore = create<EnergyState>((set) => ({
               ];
             }
 
-            return {
+            const newState = {
               dailyUsage:       newDaily,
               weeklyUsage:      newWeekly,
               totalConsumption: newTotal,
-              currentBill:      newTotal * 8.5,
-              projectedBill:    newTotal * 30,
+              currentBill:      newTotal * 12.5,
+              projectedBill:    newTotal * 31,
               isLive:           true,
               lastUpdated:      new Date(),
             };
+
+           
+            state.persistToSupabase(newState.currentBill, newState.totalConsumption, newState.projectedBill).catch(console.error);
+
+            return newState;
           });
         }
       )

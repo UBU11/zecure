@@ -5,10 +5,11 @@ import UsageChart from '../components/UsageChart';
 import BillCard from '../components/BillCard';
 import { Zap, DollarSign, Activity, FileText, ArrowLeft } from 'lucide-react';
 import { motion } from 'motion/react';
-import { UserButton } from "@clerk/clerk-react";
+import { UserButton, useUser } from "@clerk/clerk-react";
 
 const Dashboard: React.FC = () => {
-  const { dailyUsage, weeklyUsage, currentBill, totalConsumption, projectedBill, currency, refreshData, startRealtime, isLive, lastUpdated } = useEnergyStore();
+  const { user } = useUser();
+  const { dailyUsage, weeklyUsage, currentBill, totalConsumption, projectedBill, currency, refreshData, startRealtime, isLive, lastUpdated, setUserId } = useEnergyStore();
   const navigate = useNavigate();
   //refreshes every second
   const [, setTick] = useState(0);
@@ -23,16 +24,17 @@ const Dashboard: React.FC = () => {
     : null;
 
   useEffect(() => {
-    refreshData().then(() => {
-   
-      startRealtime();
-    });
-
+    if (user?.id) {
+      setUserId(user.id);
+      refreshData().then(() => {
+        startRealtime();
+      });
+    }
+    
     return () => {
       import('../lib/supabase').then(({ supabase }) => supabase.removeAllChannels());
     };
-
-  }, []);
+  }, [user?.id, setUserId]);
 
   return (
     <div className="min-h-screen bg-[#030014] text-white p-6 md:p-10">
