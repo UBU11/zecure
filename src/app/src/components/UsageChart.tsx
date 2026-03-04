@@ -27,6 +27,10 @@ const UsageChart: React.FC<UsageChartProps> = ({
   subTitle = "Energy Consumption (kWh)", 
   type = "splinearea" 
 }) => {
+  const safeData = data
+    .filter(d => isFinite(d.value) && !isNaN(d.value))
+    .map(d => ({ label: d.label, value: d.value }));
+
   const chartConfigs = {
     type: type,
     width: "100%",
@@ -69,7 +73,7 @@ const UsageChart: React.FC<UsageChartProps> = ({
         crossLineColor: "#A78BFA",
         crossLineAlpha: "30"
       },
-      data: data
+      data: safeData
     }
   };
 

@@ -4,7 +4,12 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "bun run src/index.ts",
+    "start": "bun src/index.ts",
+    "check:env": "bun scripts/check-env.ts",
+    "check:types": "tsc --noEmit",
+    "prod:check": "bun check:env && bun check:types"
   },
   "keywords": [],
   "author": "",
@@ -12,7 +17,17 @@
   "packageManager": "pnpm@10.25.0",
   "dependencies": {
     "@supabase/supabase-js": "^2.98.0",
+    "amqplib": "^0.10.9",
     "dotenv": "^17.3.1",
-    "mqtt": "^5.15.0"
+    "express": "^5.2.1",
+    "mqtt": "^5.15.0",
+    "socket.io": "^4.8.3"
+  },
+  "devDependencies": {
+    "@types/amqplib": "^0.10.8",
+    "@types/bun": "^1.3.10",
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.3.3",
+    "i": "^0.3.7"
   }
 }

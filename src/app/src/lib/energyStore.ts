@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { supabase } from './supabase';
 
+let realtimeStarted = false;
+
 interface ConsumptionData {
   label: string;
   value: number;
@@ -15,8 +17,9 @@ interface EnergyState {
   projectedBill: number;
   currency: string;
   isLive: boolean;
-  
-  refreshData: () => void;
+  lastUpdated: Date | null;
+
+  refreshData: () => Promise<void>;
   startRealtime: () => void;
 }
 
@@ -27,7 +30,7 @@ const generateInitialData = (count: number, prefix: string) => {
   }));
 };
 
-export const useEnergyStore = create<EnergyState>((set, get) => ({
+export const useEnergyStore = create<EnergyState>((set) => ({
   dailyUsage: generateInitialData(24, "Hour"),
   weeklyUsage: generateInitialData(7, "Day"),
   monthlyUsage: generateInitialData(30, "Day"),
@@ -36,9 +39,9 @@ export const useEnergyStore = create<EnergyState>((set, get) => ({
   projectedBill: 0,
   currency: "₹",
   isLive: false,
+  lastUpdated: null,
 
   refreshData: async () => {
-    // Fetch last 1000 readings to have enough for aggregation
     const { data, error } = await supabase
       .from('meter_readings')
       .select('*')
@@ -85,42 +88,98 @@ export const useEnergyStore = create<EnergyState>((set, get) => ({
   },
 
   startRealtime: () => {
-    if (get().isLive) return;
-    
-    console.log("Starting real-time energy updates...");
-    
+
+    if (realtimeStarted) {
+      console.log('[energyStore] Realtime already started — skipping duplicate call');
+      return;
+    }
+    realtimeStarted = true;
+
+
+    console.log('[energyStore] Starting Supabase Realtime subscription…');
+
+
     supabase
       .channel('realtime-energy')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'meter_readings' }, (payload) => {
-        const newData = payload.new;
-        const kwhPulse = (newData.power * 2) / 3600000;
-        
-        set(state => {
-          const lastPoint = state.dailyUsage[state.dailyUsage.length - 1];
-          const currentHour = new Date(newData.recorded_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }).replace(/:[0-9]{2}/, ':00');
-          
-          let newDaily = [...state.dailyUsage];
-          if (lastPoint && lastPoint.label === currentHour) {
-            newDaily[newDaily.length - 1] = {
-              ...lastPoint,
-              value: parseFloat((lastPoint.value + kwhPulse).toFixed(4))
-            };
-          } else {
-         
-            newDaily = [...newDaily.slice(1), { label: currentHour, value: parseFloat(kwhPulse.toFixed(4)) }];
-          }
-          
-          const newTotal = state.totalConsumption + kwhPulse;
-          
-          return {
-            dailyUsage: newDaily,
-            totalConsumption: newTotal,
-            currentBill: newTotal * 8.5,
-            projectedBill: (newTotal * 30), 
-            isLive: true
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'meter_readings' },
+        (payload) => {
+          const newData = payload.new as {
+            power: number;
+            recorded_at: string;
           };
-        });
-      })
-      .subscribe();
+
+          const power = typeof newData.power === 'number' ? newData.power : 0;
+          const kwhPulse = (power * 2) / 3600000;
+
+      
+          if (!isFinite(kwhPulse) || isNaN(kwhPulse)) return;
+
+          set(state => {
+            const lastPoint  = state.dailyUsage[state.dailyUsage.length - 1];
+            const currentHour = new Date(newData.recorded_at)
+              .toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+              .replace(/:[0-9]{2}$/, ':00');
+
+            let newDaily = [...state.dailyUsage];
+            if (lastPoint && lastPoint.label === currentHour) {
+              newDaily[newDaily.length - 1] = {
+                ...lastPoint,
+                value: parseFloat((lastPoint.value + kwhPulse).toFixed(4)),
+              };
+            } else {
+              newDaily = [
+                ...newDaily.slice(1),
+                { label: currentHour, value: parseFloat(kwhPulse.toFixed(4)) },
+              ];
+            }
+
+            const newTotal = state.totalConsumption + kwhPulse;
+
+            const today = new Date().toLocaleDateString([], { month: 'short', day: 'numeric' });
+            let newWeekly = [...state.weeklyUsage];
+            const lastDay = newWeekly[newWeekly.length - 1];
+            if (lastDay && lastDay.label === today) {
+              newWeekly[newWeekly.length - 1] = {
+                ...lastDay,
+                value: parseFloat((lastDay.value + kwhPulse).toFixed(4)),
+              };
+            } else {
+              newWeekly = [
+                ...newWeekly.slice(1),
+                { label: today, value: parseFloat(kwhPulse.toFixed(4)) },
+              ];
+            }
+
+            return {
+              dailyUsage:       newDaily,
+              weeklyUsage:      newWeekly,
+              totalConsumption: newTotal,
+              currentBill:      newTotal * 8.5,
+              projectedBill:    newTotal * 30,
+              isLive:           true,
+              lastUpdated:      new Date(),
+            };
+          });
+        }
+      )
+      .subscribe((status, err) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('[energyStore] Realtime channel SUBSCRIBED');
+          set({ isLive: true });
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('[energyStore] Realtime channel error:', err);
+          realtimeStarted = false; 
+          set({ isLive: false });
+        } else if (status === 'TIMED_OUT') {
+          console.warn('[energyStore] Realtime channel timed out — retrying…');
+          realtimeStarted = false; 
+          set({ isLive: false });
+        } else {
+          console.log('[energyStore] Realtime status:', status);
+        }
+      });
   }
 }));
+

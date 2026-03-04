@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useEnergyStore } from '../lib/energyStore';
 import UsageChart from '../components/UsageChart';
@@ -8,12 +8,30 @@ import { motion } from 'motion/react';
 import { UserButton } from "@clerk/clerk-react";
 
 const Dashboard: React.FC = () => {
-  const { dailyUsage, weeklyUsage, currentBill, totalConsumption, projectedBill, currency, refreshData, startRealtime } = useEnergyStore();
+  const { dailyUsage, weeklyUsage, currentBill, totalConsumption, projectedBill, currency, refreshData, startRealtime, isLive, lastUpdated } = useEnergyStore();
   const navigate = useNavigate();
+  //refreshes every second
+  const [, setTick] = useState(0);
 
   useEffect(() => {
-    refreshData();
-    startRealtime();
+    const id = setInterval(() => setTick(t => t + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const formattedTime = lastUpdated
+    ? lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    : null;
+
+  useEffect(() => {
+    refreshData().then(() => {
+   
+      startRealtime();
+    });
+
+    return () => {
+      import('../lib/supabase').then(({ supabase }) => supabase.removeAllChannels());
+    };
+
   }, []);
 
   return (
@@ -30,7 +48,22 @@ const Dashboard: React.FC = () => {
             <ArrowLeft className="w-4 h-4" /> Back to Home
           </button>
           <h1 className="text-4xl font-bold gradient-text">Smart Energy Dashboard</h1>
-          <p className="text-slate-400 mt-1">Real-time monitoring and analytics</p>
+          <div className="flex items-center gap-3 mt-1">
+            <p className="text-slate-400">Real-time monitoring and analytics</p>
+            <span className={`inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-xs font-semibold ${
+              isLive
+                ? 'bg-green-500/15 text-green-400 border border-green-500/30'
+                : 'bg-slate-700/40 text-slate-500 border border-slate-600/30'
+            }`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${
+                isLive ? 'bg-green-400 animate-pulse' : 'bg-slate-500'
+              }`} />
+              {isLive ? 'Live' : 'Offline'}
+            </span>
+            {formattedTime && (
+              <span className="text-xs text-slate-500">Updated {formattedTime}</span>
+            )}
+          </div>
         </motion.div>
         
         <motion.div 
