@@ -6,6 +6,7 @@ import BillCard from '../components/BillCard';
 import { Zap, DollarSign, Activity, FileText, ArrowLeft } from 'lucide-react';
 import { motion } from 'motion/react';
 import { UserButton, useUser } from "@clerk/clerk-react";
+import Chat from '../components/Chat';
 
 const Dashboard: React.FC = () => {
   const { user } = useUser();
@@ -13,11 +14,45 @@ const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   //refreshes every second
   const [, setTick] = useState(0);
+  const [insights, setInsights] = useState<{ tips: string[], peakAlert: string, loading: boolean }>({
+    tips: [],
+    peakAlert: 'Normal',
+    loading: true,
+  });
+
+  const fetchInsights = async (uid: string) => {
+    setInsights(prev => ({ ...prev, loading: true }));
+    try {
+      const res = await fetch('http://localhost:3005/agents/energy-agent/insights', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: uid }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      if (data.tips && data.peakAlert) {
+        setInsights({ tips: data.tips, peakAlert: data.peakAlert, loading: false });
+      } else {
+        throw new Error('Invalid response shape');
+      }
+    } catch (err) {
+      console.error('Error fetching insights:', err);
+      setInsights({
+        tips: ['Check that high-draw appliances are off when not in use.', 'Consider shifting laundry to off-peak hours.'],
+        peakAlert: 'Agent Offline — showing default tips',
+        loading: false,
+      });
+    }
+  };
 
   useEffect(() => {
     const id = setInterval(() => setTick(t => t + 1), 1000);
     return () => clearInterval(id);
   }, []);
+
+  useEffect(() => {
+    if (user?.id) fetchInsights(user.id);
+  }, [user?.id]);
 
   const formattedTime = lastUpdated
     ? lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
@@ -74,7 +109,7 @@ const Dashboard: React.FC = () => {
           className="flex items-center gap-6"
         >
           <button 
-            onClick={refreshData}
+            onClick={() => { refreshData(); if (user?.id) fetchInsights(user.id); }}
             className="px-6 py-2 bg-purple-600 hover:bg-purple-700 rounded-full font-medium transition-all shadow-lg hover:shadow-purple-500/20"
           >
             Refresh Data
@@ -155,8 +190,12 @@ const Dashboard: React.FC = () => {
              <div className="glass-card p-6 min-h-[150px] flex items-center justify-center">
                 <p className="text-slate-500 italic">Advanced Analytics Panel Coming Soon</p>
              </div>
-             <div className="glass-card p-6 min-h-[150px] flex items-center justify-center">
-                <p className="text-slate-500 italic">Peak Usage Alerts</p>
+             <div className={`glass-card p-6 min-h-[150px] flex flex-col items-center justify-center border ${insights.peakAlert !== 'Normal' ? 'border-amber-500/50 bg-amber-500/5' : 'border-white/10'}`}>
+                <Activity className={`w-8 h-8 mb-2 ${insights.peakAlert !== 'Normal' ? 'text-amber-400' : 'text-slate-500'}`} />
+                <p className={`text-center font-medium ${insights.peakAlert !== 'Normal' ? 'text-amber-200' : 'text-slate-400'}`}>
+                  {insights.peakAlert}
+                </p>
+                {insights.peakAlert === 'Normal' && <p className="text-xs text-slate-500 mt-1">No unusual spikes detected</p>}
              </div>
           </div>
         </motion.div>
@@ -178,20 +217,42 @@ const Dashboard: React.FC = () => {
           </div>
           
           <div className="glass-card p-6">
-            <h3 className="text-xl font-bold mb-4">Quick Tips</h3>
-            <ul className="space-y-4 text-sm text-slate-400">
-              <li className="flex gap-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 mt-1.5 shrink-0" />
-                Setting your AC to 24°C can save up to 15% on daily usage.
-              </li>
-              <li className="flex gap-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-purple-400 mt-1.5 shrink-0" />
-                Scheduled laundry during off-peak hours (10 PM - 6 AM) reduces tariff costs.
-              </li>
-            </ul>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold">Quick Tips</h3>
+              {user?.id && (
+                <button
+                  onClick={() => fetchInsights(user.id!)}
+                  disabled={insights.loading}
+                  className="text-xs text-purple-400 hover:text-purple-300 disabled:opacity-50 transition-colors"
+                >
+                  {insights.loading ? '⟳ Loading…' : '↺ Refresh'}
+                </button>
+              )}
+            </div>
+            {insights.loading ? (
+              <div className="flex items-center gap-2 text-slate-500 text-sm py-4">
+                <div className="w-4 h-4 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
+                Generating AI insights…
+              </div>
+            ) : (
+              <ul className="space-y-4 text-sm text-slate-400">
+                {insights.tips.length > 0 ? (
+                  insights.tips.map((tip, i) => (
+                    <li key={i} className="flex gap-2">
+                      <div className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${i % 2 === 0 ? 'bg-cyan-400' : 'bg-purple-400'}`} />
+                      {tip}
+                    </li>
+                  ))
+                ) : (
+                  <li className="italic text-slate-500">No tips available. Click Refresh to generate.</li>
+                )}
+              </ul>
+            )}
           </div>
         </motion.div>
       </div>
+
+      <Chat userId={user?.id || 'anonymous'} />
     </div>
   );
 };

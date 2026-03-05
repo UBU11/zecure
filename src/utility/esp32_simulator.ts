@@ -1,7 +1,10 @@
 import fs from "fs";
 import path from "path";
 import { encryptJsonFile } from "./key";
+import { EventEmitter } from "events";
 
+
+export const simulatorEvents = new EventEmitter();
 
 type ESP32State = "BOOTING" | "CONNECTING_WIFI" | "CONNECTING_MQTT" | "RUNNING" | "ERROR";
 
@@ -27,6 +30,11 @@ class ESP32Simulator {
     this.deviceId = deviceId;
     this.dataFile = path.resolve(__dirname, "../data/esp32.json");
     this.encryptedFile = path.resolve(__dirname, "../data/esp32.json.enc");
+    
+    const dataDir = path.dirname(this.dataFile);
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
   }
 
   private log(message: string, level: "INFO" | "WARN" | "ERROR" = "INFO") {
@@ -70,6 +78,8 @@ class ESP32Simulator {
 
 
       await encryptJsonFile(this.dataFile, this.encryptedFile);
+      
+      simulatorEvents.emit("data", data);
 
     } catch (error) {
       this.log(`Failed to save state: ${error}`, "ERROR");
@@ -126,5 +136,12 @@ class ESP32Simulator {
 }
 
 
-const simulator = new ESP32Simulator("esp32-room-01");
-simulator.start().catch((err) => console.error(err));
+export async function startSimulator(deviceId: string = "esp32-room-01") {
+  const simulator = new ESP32Simulator(deviceId);
+  return simulator.start();
+}
+
+
+// if (import.meta.main) {
+//   startSimulator().catch((err) => console.error(err));
+// }

@@ -211,11 +211,12 @@ export const useEnergyStore = create<EnergyState>((set) => ({
               lastUpdated:      new Date(),
             };
 
-           
-            state.persistToSupabase(newState.currentBill, newState.totalConsumption, newState.projectedBill).catch(console.error);
-
             return newState;
           });
+
+       
+          const updatedState = useEnergyStore.getState();
+          updatedState.persistToSupabase(updatedState.currentBill, updatedState.totalConsumption, updatedState.projectedBill).catch(console.error);
         }
       )
       .subscribe((status, err) => {

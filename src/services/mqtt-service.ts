@@ -1,65 +1,71 @@
 import mqtt from "mqtt";
-import * as fs from "fs";
-import * as path from "path";
+import { simulatorEvents } from "../utility/esp32_simulator";
+import { encryptJsonFile } from "../utility/key";
+import fs from "fs";
+import path from "path";
 
-const protocol = "mqtt";
-const host = process.env.MQTT_HOST ?? "localhost";
-const port = "1883";
-const clientId = `mqtt_${Math.random().toString(16).slice(3)}`;
-const connectUrl = `${protocol}://${host}:${port}`;
+export async function startMqttService() {
+  const protocol = "mqtt";
+  const host = process.env.MQTT_HOST ?? "localhost";
+  const port = "1883";
+  const clientId = `mqtt_${Math.random().toString(16).slice(3)}`;
+  const connectUrl = `${protocol}://${host}:${port}`;
 
-const encodedFile = fs.readFileSync(path.resolve(__dirname, "../data/esp32.json.enc"), "utf8");
+  console.log(`[MQTT] Connecting to ${connectUrl}...`);
+
+  const client = mqtt.connect(connectUrl, {
+    clientId,
+    clean: true,
+    connectTimeout: 4000,
+    username: "client1",
+    password: "public",
+    reconnectPeriod: 5000,
+  });
+
+  const topic = "esp32/data"
 
 
+  simulatorEvents.on("data", async (data) => {
+    if (!client.connected) return;
 
-const client = mqtt.connect(connectUrl, {
-  clientId,
-  clean: true,
-  connectTimeout: 4000,
-  username: "client1",
-  password: "public",
-  reconnectPeriod: 1000,
-});
+    try {
+      const dataPath = path.resolve(__dirname, "../data/esp32.json.enc");
+      if (fs.existsSync(dataPath)) {
+        const encodedFile = fs.readFileSync(dataPath, "utf8");
+        client.publish(
+          topic,
+          encodedFile,
+          { qos: 1, retain: false },
+          (err) => {
+            if (err) console.error("[MQTT] Publish error:", err.message);
+          },
+        );
+      }
+    } catch (e) {
+      console.error("[MQTT] Failed to publish event data:", e);
+    }
+  });
 
-const topic = "esp32/data"
+  client.on("connect", () => {
+    console.log("[MQTT] Connected to broker successfully");
+  });
 
-const publishData = () => {
-  try {
-    const encodedFile = fs.readFileSync(path.resolve(__dirname, "../data/esp32.json.enc"), "utf8");
-    console.log("Publishing latest data to MQTT...");
-    client.publish(
-      topic,
-      encodedFile,
-      { qos: 1, retain: false },
-      (err) => {
-        if (err) {
-          console.error("publish error: ", err);
-        } else {
-          console.log("Data published successfully at:", new Date().toISOString());
-        }
-      },
-    );
-  } catch (e) {
-    console.error("Failed to read encoded file for MQTT publish:", e);
-  }
-};
+  client.on("message", (topic, message) => {
+    console.log(`[MQTT] Received message on topic ${topic}`);
+  });
 
-client.on("connect", () => {
-  console.log("Connected");
-  
-  publishData();
+  client.on('error', (err: any) => {
+    // Only log essential info to reduce noise
+    if (err.code === 'ECONNREFUSED') {
+      const target = err.address ? `${err.address}:${err.port}` : connectUrl;
+      console.warn(`[MQTT] Connection refused at ${target}. Is the broker running?`);
+    } else {
+      console.error('[MQTT] error:', err.message || err);
+    }
+  });
+}
 
-  setInterval(() => {
-    publishData();
-  }, 1000);
-});
+// if (import.meta.main) {
+//   startMqttService().catch(console.error);
+// }
 
-client.on("message", (topic, message) => {
-  console.log(`Received message on topic ${topic}:`, message.toString());
-
-});
-
-client.on('error', (err)=>{
-  console.log('mqtt error: ',err)
-  client.reconnect()
-})

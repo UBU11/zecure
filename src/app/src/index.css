@@ -45,6 +45,12 @@ body {
   box-shadow: 0 0 50px -12px rgba(123, 31, 162, 0.3);
 }
 
+.glass-chat {
+  background: rgba(3, 0, 20, 0.7);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
 
 .cl-internal-ph67as, 
 .cl-internal-17lyz7w, 

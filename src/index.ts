@@ -1,46 +1,67 @@
 import express from "express";
 import { createServer } from "node:http";
 import { Server } from "socket.io";
-import path from "node:path";
+import { startSimulator } from "./utility/esp32_simulator";
+import { startMqttService } from "./services/mqtt-service";
+import { startRabbitMQWorker } from "./services/rabbitmq-worker";
+import { startSupabaseWorker } from "./services/supabase-worker";
 
-
-console.log("Backend Orchestrator");
+console.log("=========================================");
+console.log("   Zecure Backend Orchestrator v2.0    ");
+console.log("      (Single Process Architecture)      ");
+console.log("=========================================");
 
 const services = [
-  { name: "ESP32 Simulator",   path: "./src/utility/esp32_simulator.ts" },
-  { name: "MQTT Service",      path: "./src/services/mqtt-service.ts" },
-  { name: "RabbitMQ Worker",   path: "./src/services/rabbitmq-worker.ts" },
-  { name: "Supabase Worker",   path: "./src/services/supabase-worker.ts" },
+  { name: "ESP32 Simulator",   start: () => startSimulator() },
+  { name: "MQTT Service",      start: () => startMqttService() },
+  { name: "RabbitMQ Worker",   start: () => startRabbitMQWorker() },
+  { name: "Supabase Worker",   start: () => startSupabaseWorker() },
 ];
 
-const processes: any[] = [];
+console.log("[Orchestrator] Starting components...");
 
-services.forEach(service => {
-  console.log(`[Orchestrator] Spawning ${service.name}...`);
-  const proc = Bun.spawn(["bun", service.path], {
-    stdout: "inherit",
-    stderr: "inherit",
-    env: process.env,
-  });
-  processes.push(proc);
+services.forEach(async (service) => {
+  try {
+    console.log(`[Orchestrator] -> Launching ${service.name}`);
+    service.start();
+  } catch (err) {
+    console.error(`[Orchestrator] [ERROR] Failed to launch ${service.name}:`, err);
+  }
 });
 
+
+setInterval(() => {
+  const mem = process.memoryUsage().rss / 1024 / 1024;
+  console.log(`[Orchestrator] Heartbeat - Uptime: ${Math.floor(process.uptime())}s | Memory: ${mem.toFixed(2)}MB`);
+}, 30000);
 
 process.on("SIGINT", () => {
-  console.log("\n[Orchestrator] Shutting down services...");
-  processes.forEach(p => p.kill());
-  process.exit();
+  console.log("\n[Orchestrator] Graceful shutdown initiated...");
+  process.exit(0);
 });
-
 
 const app = express();
 const server = createServer(app);
 const io = new Server(server);
 
-app.get("/status", (req, res) => {
-  res.json({ status: "online", services: services.map(s => s.name) });
+app.get("/", (req, res) => {
+  res.json({ message: "Zecure API is running" });
 });
 
-server.listen(3000, () => {
-  console.log("[Orchestrator] Control server running at http://localhost:3000");
+app.get("/status", (req, res) => {
+  res.json({ 
+    status: "online", 
+    mode: "single-process",
+    services: services.map(s => s.name),
+    memory: process.memoryUsage(),
+    uptime: process.uptime(),
+    node: process.version,
+    platform: process.platform
+  });
+});
+
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+  console.log(`[Orchestrator] API Server running at http://localhost:${PORT}`);
+  console.log(`[Orchestrator] Check status at http://localhost:${PORT}/status`);
 });
