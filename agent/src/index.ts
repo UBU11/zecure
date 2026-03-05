@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import { mastra } from './mastra';
+import 'dotenv/config'
 
 const app = express();
 const port = 3005;
@@ -15,7 +16,7 @@ app.use((req, res, next) => {
 
 app.get('/health', (req, res) => res.json({ ok: true }));
 
-/
+
 app.post('/agents/:agentId/chat', async (req, res) => {
   const { agentId } = req.params;
   const { messages, threadId, resourceId, userId } = req.body;

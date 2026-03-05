@@ -1,14 +1,28 @@
 import { createTool } from '@mastra/core/tools';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-dotenv.config();
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const supabase = createClient(
-  process.env.SUPABASE_URL || '',
-  process.env.SUPABASE_KEY || ''
-);
+// Load .env from agent root, fallback to repo root — whichever is found first
+dotenv.config({ path: path.resolve(__dirname, '../../../../.env') });
+dotenv.config({ path: path.resolve(__dirname, '../../../../../.env') });
+
+// Lazy singleton — not created until the first tool call so env is guaranteed loaded
+let _supabase: SupabaseClient | null = null;
+function getSupabase(): SupabaseClient {
+  if (!_supabase) {
+    const url = process.env.SUPABASE_URL;
+    const key = process.env.SUPABASE_KEY ?? process.env.SUPABASE_API;
+    if (!url) throw new Error('[energy-tools] SUPABASE_URL is not set. Check your .env file.');
+    if (!key) throw new Error('[energy-tools] SUPABASE_KEY (or SUPABASE_API) is not set. Check your .env file.');
+    _supabase = createClient(url, key);
+  }
+  return _supabase;
+}
 
 export const getMeterReadings = createTool({
   id: 'get_meter_readings',
@@ -18,7 +32,7 @@ export const getMeterReadings = createTool({
   }),
   execute: async ({ limit }) => {
     console.log('Fetching meter readings with limit:', limit);
-    const { data, error } = await supabase
+    const { data, error } = await getSupabase()
       .from('meter_readings')
       .select('*')
       .order('recorded_at', { ascending: false })
@@ -41,7 +55,7 @@ export const getUserDashboard = createTool({
   }),
   execute: async ({ userId }) => {
     console.log('Fetching dashboard for user:', userId);
-    const { data, error } = await supabase
+    const { data, error } = await getSupabase()
       .from('user_dashboard')
       .select('*')
       .eq('user_id', userId)
@@ -67,7 +81,7 @@ export const persistAiInsights = createTool({
   execute: async ({ userId, tips, peakAlert }) => {
     console.log('Persisting insights for user:', userId);
     try {
-      const { data, error } = await supabase
+      const { error } = await getSupabase()
         .from('user_dashboard')
         .update({
           ai_tips: tips,
@@ -77,19 +91,18 @@ export const persistAiInsights = createTool({
         .eq('user_id', userId);
 
       if (error) {
-      
         if (error.message.includes('column') || error.code === '42703') {
-          console.warn('[persistAiInsights] Schema mismatch in Supabase. AI columns might be missing:', error.message);
+          console.warn('[persistAiInsights] Schema mismatch — AI columns might be missing:', error.message);
           return { success: false, message: 'Schema mismatch, insights not persisted' };
         }
         console.error('Error persisting AI insights:', error.message);
         throw new Error(error.message);
       }
-      
+
       console.log('Successfully persisted AI insights');
       return { success: true, message: 'Insights persisted successfully' };
     } catch (e) {
-      console.warn('[persistAiInsights] Failed to persist, but continuing workflow:', (e as Error).message);
+      console.warn('[persistAiInsights] Failed to persist, continuing workflow:', (e as Error).message);
       return { success: false, message: (e as Error).message };
     }
   },

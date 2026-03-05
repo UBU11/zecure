@@ -8,14 +8,25 @@ import { createTool } from '@mastra/core/tools';
 import { createClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { createStep, Workflow } from '@mastra/core/workflows';
 
 "use strict";
-dotenv.config();
-const supabase = createClient(
-  process.env.SUPABASE_URL || "",
-  process.env.SUPABASE_KEY || ""
-);
+const __dirname$1 = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.resolve(__dirname$1, "../../../../.env") });
+dotenv.config({ path: path.resolve(__dirname$1, "../../../../../.env") });
+let _supabase = null;
+function getSupabase() {
+  if (!_supabase) {
+    const url = process.env.SUPABASE_URL;
+    const key = process.env.SUPABASE_KEY ?? process.env.SUPABASE_API;
+    if (!url) throw new Error("[energy-tools] SUPABASE_URL is not set. Check your .env file.");
+    if (!key) throw new Error("[energy-tools] SUPABASE_KEY (or SUPABASE_API) is not set. Check your .env file.");
+    _supabase = createClient(url, key);
+  }
+  return _supabase;
+}
 const getMeterReadings = createTool({
   id: "get_meter_readings",
   description: "Fetch the latest meter readings for a specific device",
@@ -24,7 +35,7 @@ const getMeterReadings = createTool({
   }),
   execute: async ({ limit }) => {
     console.log("Fetching meter readings with limit:", limit);
-    const { data, error } = await supabase.from("meter_readings").select("*").order("recorded_at", { ascending: false }).limit(limit);
+    const { data, error } = await getSupabase().from("meter_readings").select("*").order("recorded_at", { ascending: false }).limit(limit);
     if (error) {
       console.error("Error fetching meter readings:", error.message);
       throw new Error(error.message);
@@ -41,7 +52,7 @@ const getUserDashboard = createTool({
   }),
   execute: async ({ userId }) => {
     console.log("Fetching dashboard for user:", userId);
-    const { data, error } = await supabase.from("user_dashboard").select("*").eq("user_id", userId).single();
+    const { data, error } = await getSupabase().from("user_dashboard").select("*").eq("user_id", userId).single();
     if (error && error.code !== "PGRST116") {
       console.error("Error fetching user dashboard:", error.message);
       throw new Error(error.message);
@@ -60,17 +71,26 @@ const persistAiInsights = createTool({
   }),
   execute: async ({ userId, tips, peakAlert }) => {
     console.log("Persisting insights for user:", userId);
-    const { data, error } = await supabase.from("user_dashboard").update({
-      ai_tips: tips,
-      ai_peak_alert: peakAlert,
-      last_ai_update: (/* @__PURE__ */ new Date()).toISOString()
-    }).eq("user_id", userId);
-    if (error) {
-      console.error("Error persisting AI insights:", error.message);
-      throw new Error(error.message);
+    try {
+      const { error } = await getSupabase().from("user_dashboard").update({
+        ai_tips: tips,
+        ai_peak_alert: peakAlert,
+        last_ai_update: (/* @__PURE__ */ new Date()).toISOString()
+      }).eq("user_id", userId);
+      if (error) {
+        if (error.message.includes("column") || error.code === "42703") {
+          console.warn("[persistAiInsights] Schema mismatch \u2014 AI columns might be missing:", error.message);
+          return { success: false, message: "Schema mismatch, insights not persisted" };
+        }
+        console.error("Error persisting AI insights:", error.message);
+        throw new Error(error.message);
+      }
+      console.log("Successfully persisted AI insights");
+      return { success: true, message: "Insights persisted successfully" };
+    } catch (e) {
+      console.warn("[persistAiInsights] Failed to persist, continuing workflow:", e.message);
+      return { success: false, message: e.message };
     }
-    console.log("Successfully persisted AI insights");
-    return { success: true, message: "Insights persisted successfully" };
   }
 });
 const energyTools = {
@@ -87,16 +107,16 @@ const energyAgent = new Agent({
     You are an expert energy management assistant for the Zecure platform.
     Your goal is to help users understand their electricity consumption and save money.
     
-    You have access to:
-    1. Latest meter readings (real-time data).
-    2. User dashboard totals (current bill, usage, projected bill).
+    CRITICAL: 
+    - When calling 'get_user_dashboard', you MUST provide the 'userId' from the conversation context (it's often passed in the threadId or system context).
+    - 'get_meter_readings' provides global system data for now; use it to identify general patterns or spikes even if it's not user-specific.
     
     When asked about usage:
-    - Analyze the latest meter readings for any unusual spikes.
-    - Compare the current bill with the projected bill to warn users of high upcoming costs.
-    - Provide specific, actionable tips (e.g., "Your AC usage spiked at 2 PM, consider adjusting the thermostat").
+    - First, fetch the user's dashboard data to get their current bill and projected costs.
+    - Then, analyze the latest meter readings for any unusual spikes or high power factor issues.
+    - Provide specific, actionable tips (e.g., "I noticed a spike in power usage today; consider checking if any heavy appliances were left on").
     
-    Always be professional, data-driven, and helpful.
+    Always be professional, data-driven, and proactive in helping users reduce their energy footprint.
   `,
   model: "groq/llama-3.3-70b-versatile",
   tools: {
@@ -140,16 +160,21 @@ const analyzeAndGenerateStep = createStep({
   execute: async ({ inputData }) => {
     const { dashboard, readings, userId } = inputData;
     const prompt = `
-      User Dashboard: ${JSON.stringify(dashboard)}
-      Recent Meter Readings: ${JSON.stringify(readings)}
+      User Context:
+      - User ID: ${userId}
+      - Dashboard Data: ${dashboard?.message ? "No specific dashboard record found for this user." : JSON.stringify(dashboard)}
+      - Recent Meter Readings: ${JSON.stringify(readings)}
       
-      Analyze this data for user ${userId}. 
-      Return 2-3 actionable energy saving tips and a summary of any peak usage spikes.
+      Analysis Request:
+      1. Review the recent meter readings for any consumption spikes or unusual patterns.
+      2. If dashboard data is available, compare current usage with projected costs.
+      3. Generate 2-3 specific, actionable energy-saving tips based on the data provided.
+      4. If data is sparse, provide general high-impact tips (e.g., LED lighting, appliance efficiency).
       
       YOU MUST RETURN ONLY A RAW JSON OBJECT with this structure:
       {
         "tips": ["tip1", "tip2"],
-        "peakAlert": "A short warning message OR \\"Normal\\""
+        "peakAlert": "A short summary of spikes OR \\"Normal\\""
       }
     `;
     const result = await energyAgent.generate(prompt);
