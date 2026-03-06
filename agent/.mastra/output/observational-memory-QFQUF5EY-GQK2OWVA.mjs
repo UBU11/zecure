@@ -12,7 +12,7 @@ import '@mastra/loggers';
 import '@mastra/libsql';
 import '@mastra/memory';
 import '@mastra/observability';
-import './tools/3badb44b-df07-4ea0-bd01-21ad547d5fc3.mjs';
+import './tools/dab87ede-89d8-46bb-b1f8-9395b2ee9137.mjs';
 import '@mastra/core/tools';
 import '@supabase/supabase-js';
 import 'zod';

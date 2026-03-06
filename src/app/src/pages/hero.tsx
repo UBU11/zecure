@@ -10,7 +10,8 @@ function Hero() {
   const menuItems = [
     { label: "Home", ariaLabel: "Go to home page", link: "/" },
     { label: "Dashboard", ariaLabel: "View your energy dashboard", link: "/dashboard" },
-    { label: "Services", ariaLabel: "Our services", link: "/services" },
+    
+   
   ];
 
   const socialItems = [
