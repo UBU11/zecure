@@ -188,7 +188,7 @@ const Dashboard: React.FC = () => {
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
              <div className="glass-card p-6 min-h-[150px] flex items-center justify-center">
-                <p className="text-slate-500 italic">Advanced Analytics Panel Coming Soon</p>
+                <p className="text-slate-500 italic"></p>
              </div>
              <div className={`glass-card p-6 min-h-[150px] flex flex-col items-center justify-center border ${insights.peakAlert !== 'Normal' ? 'border-amber-500/50 bg-amber-500/5' : 'border-white/10'}`}>
                 <Activity className={`w-8 h-8 mb-2 ${insights.peakAlert !== 'Normal' ? 'text-amber-400' : 'text-slate-500'}`} />

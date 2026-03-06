@@ -5,6 +5,8 @@ import { startSimulator } from "./utility/esp32_simulator";
 import { startMqttService } from "./services/mqtt-service";
 import { startRabbitMQWorker } from "./services/rabbitmq-worker";
 import { startSupabaseWorker } from "./services/supabase-worker";
+import "./services/instrument";
+import * as Sentry from "@sentry/node";
 
 console.log("=========================================");
 console.log("   Zecure Backend Orchestrator v2.0    ");
@@ -25,7 +27,7 @@ services.forEach(async (service) => {
     console.log(`[Orchestrator] -> Launching ${service.name}`);
     service.start();
   } catch (err) {
-    console.error(`[Orchestrator] [ERROR] Failed to launch ${service.name}:`, err);
+    Sentry.captureException(`[Orchestrator] [ERROR] Failed to launch ${service.name}: ${err}`);
   }
 });
 

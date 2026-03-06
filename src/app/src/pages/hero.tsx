@@ -44,7 +44,7 @@ function Hero() {
           openMenuButtonColor="#fff"
           changeMenuColorOnOpen={true}
           colors={["#B19EEF", "#5227FF"]}
-          logoUrl="/path-to-your-logo.svg"
+          logoUrl="../../public/vite.svg"
           accentColor="#5227FF"
         />
       </div>
@@ -85,13 +85,13 @@ function Hero() {
           <div className="flex gap-6">
             <button 
               onClick={() => navigate('/dashboard')}
-              className="px-8 py-4 bg-white text-black font-bold rounded-2xl flex items-center gap-2 hover:bg-slate-200 transition-all hover:scale-105 premium-shadow cursor-pointer"
+              className="cursor-target px-8 py-4 bg-white text-black font-bold rounded-2xl flex items-center gap-2 hover:bg-slate-200 transition-all hover:scale-105 premium-shadow cursor-pointer"
             >
-              Get Started
+              Sign Up
             </button>
             <button 
               onClick={() => navigate('/sign-in')}
-              className="px-8 py-4 bg-transparent border border-white/20 text-white font-bold rounded-2xl hover:bg-white/5 transition-all cursor-pointer"
+              className="cursor-target px-8 py-4 bg-transparent border border-white/20 text-white font-bold rounded-2xl hover:bg-white/5 transition-all cursor-pointer"
             >
               Sign In
             </button>

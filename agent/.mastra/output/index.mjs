@@ -5,7 +5,7 @@ import { LibSQLStore } from '@mastra/libsql';
 import { Memory as Memory$1 } from '@mastra/memory';
 import { Observability, SensitiveDataFilter, DefaultExporter, CloudExporter } from '@mastra/observability';
 import { Agent, MessageList, isSupportedLanguageModel, tryGenerateWithJsonFallback, tryStreamWithJsonFallback } from '@mastra/core/agent';
-import { energyTools } from './tools/70b17ec3-0ad0-4d28-84fa-248ab7dd1a0f.mjs';
+import { energyTools } from './tools/3badb44b-df07-4ea0-bd01-21ad547d5fc3.mjs';
 import { Workflow, createStep, createWorkflow } from '@mastra/core/workflows';
 import z$1, { z, ZodObject } from 'zod';
 import { readdir, readFile, mkdtemp, rm, writeFile, mkdir, copyFile, stat } from 'fs/promises';
@@ -6059,6 +6059,269 @@ var DELETE_STORED_PROMPT_BLOCK_ROUTE = createRoute({
   }
 });
 
+// src/server/auth/defaults.ts
+var defaultAuthConfig = {
+  protected: ["/api/*"],
+  public: ["/api", "/api/auth/*"],
+  // Simple rule system
+  rules: [
+    // Admin users can do anything
+    {
+      condition: (user) => {
+        if (typeof user === "object" && user !== null) {
+          if ("isAdmin" in user) {
+            return !!user.isAdmin;
+          }
+          if ("role" in user) {
+            return user.role === "admin";
+          }
+        }
+        return false;
+      },
+      allow: true
+    }
+  ]
+};
+
+// src/server/auth/path-pattern.ts
+function parse(input, loose) {
+  if (input instanceof RegExp) return { keys: false, pattern: input };
+  let c;
+  let o;
+  let tmp;
+  let ext;
+  const keys = [];
+  let pattern = "";
+  const arr = input.split("/");
+  arr[0] || arr.shift();
+  while (tmp = arr.shift()) {
+    c = tmp[0];
+    if (c === "*") {
+      keys.push(c);
+      pattern += tmp[1] === "?" ? "(?:/(.*))?" : "/(.*)";
+    } else if (c === ":") {
+      o = tmp.indexOf("?", 1);
+      ext = tmp.indexOf(".", 1);
+      keys.push(tmp.substring(1, !!~o ? o : !!~ext ? ext : tmp.length));
+      pattern += !!~o && !~ext ? "(?:/([^/]+?))?" : "/([^/]+?)";
+      if (!!~ext) pattern += (!!~o ? "?" : "") + "\\" + tmp.substring(ext);
+    } else {
+      pattern += "/" + tmp;
+    }
+  }
+  return {
+    keys,
+    pattern: new RegExp("^" + pattern + ("/?$"), "i")
+  };
+}
+
+// src/server/auth/helpers.ts
+var isProtectedCustomRoute = (path, method, customRouteAuthConfig) => {
+  if (!customRouteAuthConfig) {
+    return false;
+  }
+  const exactRouteKey = `${method}:${path}`;
+  if (customRouteAuthConfig.has(exactRouteKey)) {
+    return customRouteAuthConfig.get(exactRouteKey) === true;
+  }
+  const allRouteKey = `ALL:${path}`;
+  if (customRouteAuthConfig.has(allRouteKey)) {
+    return customRouteAuthConfig.get(allRouteKey) === true;
+  }
+  for (const [routeKey, requiresAuth] of customRouteAuthConfig.entries()) {
+    const colonIndex = routeKey.indexOf(":");
+    if (colonIndex === -1) {
+      continue;
+    }
+    const routeMethod = routeKey.substring(0, colonIndex);
+    const routePattern = routeKey.substring(colonIndex + 1);
+    if (routeMethod !== method && routeMethod !== "ALL") {
+      continue;
+    }
+    if (pathMatchesPattern(path, routePattern)) {
+      return requiresAuth === true;
+    }
+  }
+  return false;
+};
+var isDevPlaygroundRequest = (path, method, getHeader, authConfig, customRouteAuthConfig) => {
+  const protectedAccess = [...defaultAuthConfig.protected || [], ...authConfig.protected || []];
+  return process.env.MASTRA_DEV === "true" && // Allow if path doesn't match protected patterns AND is not a protected custom route
+  (!isAnyMatch(path, method, protectedAccess) && !isProtectedCustomRoute(path, method, customRouteAuthConfig) || // Or if has playground header
+  getHeader("x-mastra-dev-playground") === "true");
+};
+var isProtectedPath = (path, method, authConfig, customRouteAuthConfig) => {
+  const protectedAccess = [...defaultAuthConfig.protected || [], ...authConfig.protected || []];
+  return isAnyMatch(path, method, protectedAccess) || isProtectedCustomRoute(path, method, customRouteAuthConfig);
+};
+var canAccessPublicly = (path, method, authConfig) => {
+  const publicAccess = [...defaultAuthConfig.public || [], ...authConfig.public || []];
+  return isAnyMatch(path, method, publicAccess);
+};
+var isAnyMatch = (path, method, patterns) => {
+  if (!patterns) {
+    return false;
+  }
+  for (const patternPathOrMethod of patterns) {
+    if (patternPathOrMethod instanceof RegExp) {
+      if (patternPathOrMethod.test(path)) {
+        return true;
+      }
+    }
+    if (typeof patternPathOrMethod === "string" && pathMatchesPattern(path, patternPathOrMethod)) {
+      return true;
+    }
+    if (Array.isArray(patternPathOrMethod) && patternPathOrMethod.length === 2) {
+      const [pattern, methodOrMethods] = patternPathOrMethod;
+      if (pathMatchesPattern(path, pattern) && matchesOrIncludes(methodOrMethods, method)) {
+        return true;
+      }
+    }
+  }
+  return false;
+};
+var pathMatchesPattern = (path, pattern) => {
+  const { pattern: regex } = parse(pattern);
+  return regex.test(path);
+};
+var pathMatchesRule = (path, rulePath) => {
+  if (!rulePath) return true;
+  if (typeof rulePath === "string") {
+    return pathMatchesPattern(path, rulePath);
+  }
+  if (rulePath instanceof RegExp) {
+    return rulePath.test(path);
+  }
+  if (Array.isArray(rulePath)) {
+    return rulePath.some((p) => pathMatchesPattern(path, p));
+  }
+  return false;
+};
+var matchesOrIncludes = (values, value) => {
+  if (typeof values === "string") {
+    return values === value;
+  }
+  if (Array.isArray(values)) {
+    return values.includes(value);
+  }
+  return false;
+};
+var pass = { action: "next" };
+var coreAuthMiddleware = async (ctx) => {
+  const { path, method, getHeader, mastra, authConfig, customRouteAuthConfig, requestContext, rawRequest, token } = ctx;
+  if (isDevPlaygroundRequest(path, method, getHeader, authConfig, customRouteAuthConfig)) {
+    return pass;
+  }
+  if (!isProtectedPath(path, method, authConfig, customRouteAuthConfig)) {
+    return pass;
+  }
+  if (canAccessPublicly(path, method, authConfig)) {
+    return pass;
+  }
+  let user;
+  try {
+    if (typeof authConfig.authenticateToken === "function") {
+      user = await authConfig.authenticateToken(token ?? "", rawRequest);
+    } else {
+      throw new Error("No token verification method configured");
+    }
+    if (!user) {
+      return { action: "error", status: 401, body: { error: "Invalid or expired token" } };
+    }
+    requestContext.set("user", user);
+    try {
+      const serverConfig = mastra.getServer();
+      const rbacProvider = serverConfig?.rbac;
+      if (rbacProvider) {
+        if (!user || typeof user !== "object" || !("id" in user)) {
+          mastra.getLogger()?.warn('RBAC: authenticated user missing required "id" field, skipping permission loading');
+        } else {
+          const permissions = await rbacProvider.getPermissions(user);
+          requestContext.set("userPermissions", permissions);
+          const roles = await rbacProvider.getRoles(user);
+          requestContext.set("userRoles", roles);
+        }
+      }
+    } catch (rbacError) {
+      mastra.getLogger()?.error("RBAC: failed to load user permissions/roles", {
+        error: rbacError instanceof Error ? { message: rbacError.message, stack: rbacError.stack } : rbacError
+      });
+    }
+  } catch (err) {
+    mastra.getLogger()?.error("Authentication error", {
+      error: err instanceof Error ? { message: err.message, stack: err.stack } : err
+    });
+    return { action: "error", status: 401, body: { error: "Invalid or expired token" } };
+  }
+  if ("authorizeUser" in authConfig && typeof authConfig.authorizeUser === "function") {
+    try {
+      const isAuthorized = await authConfig.authorizeUser(user, rawRequest);
+      if (!isAuthorized) {
+        return { action: "error", status: 403, body: { error: "Access denied" } };
+      }
+    } catch (err) {
+      mastra.getLogger()?.error("Authorization error in authorizeUser", {
+        error: err instanceof Error ? { message: err.message, stack: err.stack } : err
+      });
+      return { action: "error", status: 500, body: { error: "Authorization error" } };
+    }
+  } else if ("authorize" in authConfig && typeof authConfig.authorize === "function") {
+    try {
+      const authorizeCtx = ctx.buildAuthorizeContext();
+      const isAuthorized = await authConfig.authorize(path, method, user, authorizeCtx);
+      if (!isAuthorized) {
+        return { action: "error", status: 403, body: { error: "Access denied" } };
+      }
+    } catch (err) {
+      mastra.getLogger()?.error("Authorization error in authorize", {
+        error: err instanceof Error ? { message: err.message, stack: err.stack } : err,
+        path,
+        method
+      });
+      return { action: "error", status: 500, body: { error: "Authorization error" } };
+    }
+  } else if ("rules" in authConfig && authConfig.rules && authConfig.rules.length > 0) {
+    const isAuthorized = await checkRules(authConfig.rules, path, method, user);
+    if (!isAuthorized) {
+      return { action: "error", status: 403, body: { error: "Access denied" } };
+    }
+  } else {
+    const rbacProvider = mastra.getServer()?.rbac;
+    if (rbacProvider) {
+      if (defaultAuthConfig.rules && defaultAuthConfig.rules.length > 0) {
+        const isAuthorized = await checkRules(defaultAuthConfig.rules, path, method, user);
+        if (!isAuthorized) {
+          return { action: "error", status: 403, body: { error: "Access denied" } };
+        }
+      } else {
+        return { action: "error", status: 403, body: { error: "Access denied" } };
+      }
+    }
+  }
+  return pass;
+};
+var checkRules = async (rules, path, method, user) => {
+  for (const i in rules || []) {
+    const rule = rules?.[i];
+    if (!pathMatchesRule(path, rule.path)) {
+      continue;
+    }
+    if (rule.methods && !matchesOrIncludes(rule.methods, method)) {
+      continue;
+    }
+    const condition = rule.condition;
+    if (typeof condition === "function") {
+      const allowed = await Promise.resolve().then(() => condition(user)).catch(() => false);
+      if (allowed) {
+        return true;
+      }
+    } else if (rule.allow) {
+      return true;
+    }
+  }
+  return false;
+};
+
 var ssoConfigSchema = z.object({
   provider: z.string(),
   text: z.string(),
@@ -6184,6 +6447,12 @@ var GET_AUTH_CAPABILITIES_ROUTE = createPublicRoute({
   handler: async (ctx) => {
     try {
       const { mastra, request } = ctx;
+      const serverConfig = mastra.getServer?.();
+      const authConfig = serverConfig?.auth || {};
+      const getHeader = (name) => request.headers.get(name) ?? void 0;
+      if (isDevPlaygroundRequest("/api/auth/capabilities", "GET", getHeader, authConfig)) {
+        return { enabled: false, login: null };
+      }
       const auth = getAuthProvider(mastra);
       const rbac = getRBACProvider(mastra);
       const buildCapabilities = await loadBuildCapabilities();
@@ -8934,9 +9203,12 @@ function resolveToolConfig(toolsConfig, toolName) {
 }
 
 // src/server/handlers/agents.ts
-function isProviderConnected(providerId) {
+function isProviderConnected(providerId, customProviders) {
   const cleanId = providerId.includes(".") ? providerId.split(".")[0] : providerId;
   let provider = PROVIDER_REGISTRY[cleanId];
+  if (!provider && customProviders) {
+    provider = customProviders[cleanId];
+  }
   if (!provider && !cleanId.includes("/")) {
     const registryKeys = Object.keys(PROVIDER_REGISTRY);
     const matchingKey = registryKeys.find((key) => {
@@ -8945,6 +9217,15 @@ function isProviderConnected(providerId) {
     });
     if (matchingKey) {
       provider = PROVIDER_REGISTRY[matchingKey];
+    }
+    if (!provider && customProviders) {
+      const customMatchingKey = Object.keys(customProviders).find((key) => {
+        const parts = key.split("/");
+        return parts.length === 2 && parts[1] === cleanId;
+      });
+      if (customMatchingKey) {
+        provider = customProviders[customMatchingKey];
+      }
     }
   }
   if (!provider) return false;
@@ -9251,6 +9532,16 @@ async function getAgentFromSystem({ mastra, agentId }) {
       }
     }
   }
+  if (agent && mastra.getEditor) {
+    try {
+      const editorAgent = mastra.getEditor()?.agent;
+      if (editorAgent) {
+        agent = await editorAgent.applyStoredOverrides(agent);
+      }
+    } catch (error) {
+      logger.debug("Error applying stored overrides to code agent", error);
+    }
+  }
   if (!agent) {
     logger.debug(`Agent ${agentId} not found in code-defined agents, looking in stored agents`);
     try {
@@ -9389,9 +9680,17 @@ var LIST_AGENTS_ROUTE = createRoute({
     try {
       const codeAgents = mastra.listAgents();
       const isPartial = partial === "true";
+      const editor = mastra.getEditor?.();
       const serializedCodeAgentsMap = await Promise.all(
         Object.entries(codeAgents).map(async ([id, agent]) => {
-          return formatAgentList({ id, mastra, agent, requestContext, partial: isPartial });
+          let mergedAgent = agent;
+          if (editor) {
+            try {
+              mergedAgent = await editor.agent.applyStoredOverrides(agent);
+            } catch {
+            }
+          }
+          return formatAgentList({ id, mastra, agent: mergedAgent, requestContext, partial: isPartial });
         })
       );
       const serializedAgents = serializedCodeAgentsMap.reduce(
@@ -9402,10 +9701,10 @@ var LIST_AGENTS_ROUTE = createRoute({
         {}
       );
       try {
-        const editor = mastra.getEditor();
+        const editor2 = mastra.getEditor();
         let storedAgentsResult;
         try {
-          storedAgentsResult = await editor?.agent.list();
+          storedAgentsResult = await editor2?.agent.list();
         } catch (error) {
           console.error("Error listing stored agents:", error);
           storedAgentsResult = null;
@@ -9413,7 +9712,7 @@ var LIST_AGENTS_ROUTE = createRoute({
         if (storedAgentsResult?.agents) {
           for (const storedAgentConfig of storedAgentsResult.agents) {
             try {
-              const agent = await editor?.agent.getById(storedAgentConfig.id, { status: "draft" });
+              const agent = await editor2?.agent.getById(storedAgentConfig.id, { status: "draft" });
               if (!agent) continue;
               const serialized = await formatAgentList({
                 id: agent.id,
@@ -9667,19 +9966,37 @@ var GET_PROVIDERS_ROUTE = createRoute({
   description: "Returns a list of all configured AI model providers",
   tags: ["Agents"],
   requiresAuth: true,
-  handler: async () => {
+  handler: async ({ mastra }) => {
     try {
-      const providers = Object.entries(PROVIDER_REGISTRY).map(([id, provider]) => {
+      const allProviders = {};
+      for (const [id, provider] of Object.entries(PROVIDER_REGISTRY)) {
+        allProviders[id] = provider;
+      }
+      if (mastra) {
+        const customGateways = mastra.listGateways();
+        if (customGateways) {
+          for (const gateway of Object.values(customGateways)) {
+            try {
+              const customProviders = await gateway.fetchProviders();
+              for (const [providerId, config] of Object.entries(customProviders)) {
+                allProviders[providerId] = config;
+              }
+            } catch (error) {
+              console.warn(`Failed to fetch providers from gateway "${gateway.id}":`, error);
+            }
+          }
+        }
+      }
+      const providers = Object.entries(allProviders).map(([id, provider]) => {
         return {
           id,
           name: provider.name,
           label: provider.label || provider.name,
           description: provider.description || "",
           envVar: provider.apiKeyEnvVar,
-          connected: isProviderConnected(id),
+          connected: isProviderConnected(id, allProviders),
           docUrl: provider.docUrl,
           models: [...provider.models]
-          // Convert readonly array to regular array
         };
       });
       return { providers };
@@ -14377,269 +14694,6 @@ var LIST_SCORES_BY_SPAN_ROUTE = createRoute({
     }
   }
 });
-
-// src/server/auth/defaults.ts
-var defaultAuthConfig = {
-  protected: ["/api/*"],
-  public: ["/api", "/api/auth/*"],
-  // Simple rule system
-  rules: [
-    // Admin users can do anything
-    {
-      condition: (user) => {
-        if (typeof user === "object" && user !== null) {
-          if ("isAdmin" in user) {
-            return !!user.isAdmin;
-          }
-          if ("role" in user) {
-            return user.role === "admin";
-          }
-        }
-        return false;
-      },
-      allow: true
-    }
-  ]
-};
-
-// src/server/auth/path-pattern.ts
-function parse(input, loose) {
-  if (input instanceof RegExp) return { keys: false, pattern: input };
-  let c;
-  let o;
-  let tmp;
-  let ext;
-  const keys = [];
-  let pattern = "";
-  const arr = input.split("/");
-  arr[0] || arr.shift();
-  while (tmp = arr.shift()) {
-    c = tmp[0];
-    if (c === "*") {
-      keys.push(c);
-      pattern += tmp[1] === "?" ? "(?:/(.*))?" : "/(.*)";
-    } else if (c === ":") {
-      o = tmp.indexOf("?", 1);
-      ext = tmp.indexOf(".", 1);
-      keys.push(tmp.substring(1, !!~o ? o : !!~ext ? ext : tmp.length));
-      pattern += !!~o && !~ext ? "(?:/([^/]+?))?" : "/([^/]+?)";
-      if (!!~ext) pattern += (!!~o ? "?" : "") + "\\" + tmp.substring(ext);
-    } else {
-      pattern += "/" + tmp;
-    }
-  }
-  return {
-    keys,
-    pattern: new RegExp("^" + pattern + ("/?$"), "i")
-  };
-}
-
-// src/server/auth/helpers.ts
-var isProtectedCustomRoute = (path, method, customRouteAuthConfig) => {
-  if (!customRouteAuthConfig) {
-    return false;
-  }
-  const exactRouteKey = `${method}:${path}`;
-  if (customRouteAuthConfig.has(exactRouteKey)) {
-    return customRouteAuthConfig.get(exactRouteKey) === true;
-  }
-  const allRouteKey = `ALL:${path}`;
-  if (customRouteAuthConfig.has(allRouteKey)) {
-    return customRouteAuthConfig.get(allRouteKey) === true;
-  }
-  for (const [routeKey, requiresAuth] of customRouteAuthConfig.entries()) {
-    const colonIndex = routeKey.indexOf(":");
-    if (colonIndex === -1) {
-      continue;
-    }
-    const routeMethod = routeKey.substring(0, colonIndex);
-    const routePattern = routeKey.substring(colonIndex + 1);
-    if (routeMethod !== method && routeMethod !== "ALL") {
-      continue;
-    }
-    if (pathMatchesPattern(path, routePattern)) {
-      return requiresAuth === true;
-    }
-  }
-  return false;
-};
-var isDevPlaygroundRequest = (path, method, getHeader, authConfig, customRouteAuthConfig) => {
-  const protectedAccess = [...defaultAuthConfig.protected || [], ...authConfig.protected || []];
-  return process.env.MASTRA_DEV === "true" && // Allow if path doesn't match protected patterns AND is not a protected custom route
-  (!isAnyMatch(path, method, protectedAccess) && !isProtectedCustomRoute(path, method, customRouteAuthConfig) || // Or if has playground header
-  getHeader("x-mastra-dev-playground") === "true");
-};
-var isProtectedPath = (path, method, authConfig, customRouteAuthConfig) => {
-  const protectedAccess = [...defaultAuthConfig.protected || [], ...authConfig.protected || []];
-  return isAnyMatch(path, method, protectedAccess) || isProtectedCustomRoute(path, method, customRouteAuthConfig);
-};
-var canAccessPublicly = (path, method, authConfig) => {
-  const publicAccess = [...defaultAuthConfig.public || [], ...authConfig.public || []];
-  return isAnyMatch(path, method, publicAccess);
-};
-var isAnyMatch = (path, method, patterns) => {
-  if (!patterns) {
-    return false;
-  }
-  for (const patternPathOrMethod of patterns) {
-    if (patternPathOrMethod instanceof RegExp) {
-      if (patternPathOrMethod.test(path)) {
-        return true;
-      }
-    }
-    if (typeof patternPathOrMethod === "string" && pathMatchesPattern(path, patternPathOrMethod)) {
-      return true;
-    }
-    if (Array.isArray(patternPathOrMethod) && patternPathOrMethod.length === 2) {
-      const [pattern, methodOrMethods] = patternPathOrMethod;
-      if (pathMatchesPattern(path, pattern) && matchesOrIncludes(methodOrMethods, method)) {
-        return true;
-      }
-    }
-  }
-  return false;
-};
-var pathMatchesPattern = (path, pattern) => {
-  const { pattern: regex } = parse(pattern);
-  return regex.test(path);
-};
-var pathMatchesRule = (path, rulePath) => {
-  if (!rulePath) return true;
-  if (typeof rulePath === "string") {
-    return pathMatchesPattern(path, rulePath);
-  }
-  if (rulePath instanceof RegExp) {
-    return rulePath.test(path);
-  }
-  if (Array.isArray(rulePath)) {
-    return rulePath.some((p) => pathMatchesPattern(path, p));
-  }
-  return false;
-};
-var matchesOrIncludes = (values, value) => {
-  if (typeof values === "string") {
-    return values === value;
-  }
-  if (Array.isArray(values)) {
-    return values.includes(value);
-  }
-  return false;
-};
-var pass = { action: "next" };
-var coreAuthMiddleware = async (ctx) => {
-  const { path, method, getHeader, mastra, authConfig, customRouteAuthConfig, requestContext, rawRequest, token } = ctx;
-  if (isDevPlaygroundRequest(path, method, getHeader, authConfig, customRouteAuthConfig)) {
-    return pass;
-  }
-  if (!isProtectedPath(path, method, authConfig, customRouteAuthConfig)) {
-    return pass;
-  }
-  if (canAccessPublicly(path, method, authConfig)) {
-    return pass;
-  }
-  let user;
-  try {
-    if (typeof authConfig.authenticateToken === "function") {
-      user = await authConfig.authenticateToken(token ?? "", rawRequest);
-    } else {
-      throw new Error("No token verification method configured");
-    }
-    if (!user) {
-      return { action: "error", status: 401, body: { error: "Invalid or expired token" } };
-    }
-    requestContext.set("user", user);
-    try {
-      const serverConfig = mastra.getServer();
-      const rbacProvider = serverConfig?.rbac;
-      if (rbacProvider) {
-        if (!user || typeof user !== "object" || !("id" in user)) {
-          mastra.getLogger()?.warn('RBAC: authenticated user missing required "id" field, skipping permission loading');
-        } else {
-          const permissions = await rbacProvider.getPermissions(user);
-          requestContext.set("userPermissions", permissions);
-          const roles = await rbacProvider.getRoles(user);
-          requestContext.set("userRoles", roles);
-        }
-      }
-    } catch (rbacError) {
-      mastra.getLogger()?.error("RBAC: failed to load user permissions/roles", {
-        error: rbacError instanceof Error ? { message: rbacError.message, stack: rbacError.stack } : rbacError
-      });
-    }
-  } catch (err) {
-    mastra.getLogger()?.error("Authentication error", {
-      error: err instanceof Error ? { message: err.message, stack: err.stack } : err
-    });
-    return { action: "error", status: 401, body: { error: "Invalid or expired token" } };
-  }
-  if ("authorizeUser" in authConfig && typeof authConfig.authorizeUser === "function") {
-    try {
-      const isAuthorized = await authConfig.authorizeUser(user, rawRequest);
-      if (!isAuthorized) {
-        return { action: "error", status: 403, body: { error: "Access denied" } };
-      }
-    } catch (err) {
-      mastra.getLogger()?.error("Authorization error in authorizeUser", {
-        error: err instanceof Error ? { message: err.message, stack: err.stack } : err
-      });
-      return { action: "error", status: 500, body: { error: "Authorization error" } };
-    }
-  } else if ("authorize" in authConfig && typeof authConfig.authorize === "function") {
-    try {
-      const authorizeCtx = ctx.buildAuthorizeContext();
-      const isAuthorized = await authConfig.authorize(path, method, user, authorizeCtx);
-      if (!isAuthorized) {
-        return { action: "error", status: 403, body: { error: "Access denied" } };
-      }
-    } catch (err) {
-      mastra.getLogger()?.error("Authorization error in authorize", {
-        error: err instanceof Error ? { message: err.message, stack: err.stack } : err,
-        path,
-        method
-      });
-      return { action: "error", status: 500, body: { error: "Authorization error" } };
-    }
-  } else if ("rules" in authConfig && authConfig.rules && authConfig.rules.length > 0) {
-    const isAuthorized = await checkRules(authConfig.rules, path, method, user);
-    if (!isAuthorized) {
-      return { action: "error", status: 403, body: { error: "Access denied" } };
-    }
-  } else {
-    const rbacProvider = mastra.getServer()?.rbac;
-    if (rbacProvider) {
-      if (defaultAuthConfig.rules && defaultAuthConfig.rules.length > 0) {
-        const isAuthorized = await checkRules(defaultAuthConfig.rules, path, method, user);
-        if (!isAuthorized) {
-          return { action: "error", status: 403, body: { error: "Access denied" } };
-        }
-      } else {
-        return { action: "error", status: 403, body: { error: "Access denied" } };
-      }
-    }
-  }
-  return pass;
-};
-var checkRules = async (rules, path, method, user) => {
-  for (const i in rules || []) {
-    const rule = rules?.[i];
-    if (!pathMatchesRule(path, rule.path)) {
-      continue;
-    }
-    if (rule.methods && !matchesOrIncludes(rule.methods, method)) {
-      continue;
-    }
-    const condition = rule.condition;
-    if (typeof condition === "function") {
-      const allowed = await Promise.resolve().then(() => condition(user)).catch(() => false);
-      if (allowed) {
-        return true;
-      }
-    } else if (rule.allow) {
-      return true;
-    }
-  }
-  return false;
-};
 
 // src/server/handlers/a2a.ts
 var a2a_exports = {};
@@ -42879,7 +42933,7 @@ function withUserAgentSuffix2(headers, ...userAgentSuffixParts) {
   );
   return Object.fromEntries(normalizedHeaders.entries());
 }
-var VERSION4 = "4.0.15";
+var VERSION4 = "4.0.19";
 var getOriginalFetch3 = () => globalThis.fetch;
 var getFromApi2 = async ({
   url,
@@ -42964,8 +43018,8 @@ function loadOptionalSetting2({
   }
   return settingValue;
 }
-var suspectProtoRx2 = /"__proto__"\s*:/;
-var suspectConstructorRx2 = /"constructor"\s*:/;
+var suspectProtoRx2 = /"(?:_|\\u005[Ff])(?:_|\\u005[Ff])(?:p|\\u0070)(?:r|\\u0072)(?:o|\\u006[Ff])(?:t|\\u0074)(?:o|\\u006[Ff])(?:_|\\u005[Ff])(?:_|\\u005[Ff])"\s*:/;
+var suspectConstructorRx2 = /"(?:c|\\u0063)(?:o|\\u006[Ff])(?:n|\\u006[Ee])(?:s|\\u0073)(?:t|\\u0074)(?:r|\\u0072)(?:u|\\u0075)(?:c|\\u0063)(?:t|\\u0074)(?:o|\\u006[Ff])(?:r|\\u0072)"\s*:/;
 function _parse2(text42) {
   const obj = JSON.parse(text42);
   if (obj === null || typeof obj !== "object") {
@@ -42985,7 +43039,7 @@ function filter2(obj) {
       if (Object.prototype.hasOwnProperty.call(node, "__proto__")) {
         throw new SyntaxError("Object contains forbidden prototype property");
       }
-      if (Object.prototype.hasOwnProperty.call(node, "constructor") && Object.prototype.hasOwnProperty.call(node.constructor, "prototype")) {
+      if (Object.prototype.hasOwnProperty.call(node, "constructor") && node.constructor !== null && typeof node.constructor === "object" && Object.prototype.hasOwnProperty.call(node.constructor, "prototype")) {
         throw new SyntaxError("Object contains forbidden prototype property");
       }
       for (const key in node) {
@@ -45549,16 +45603,14 @@ var GatewayVideoModel = class {
     var _a932;
     const resolvedHeaders = await resolve2(this.config.headers());
     try {
-      const {
-        responseHeaders,
-        value: responseBody
-      } = await postJsonToApi2({
+      const { responseHeaders, value: responseBody } = await postJsonToApi2({
         url: this.getUrl(),
         headers: combineHeaders2(
           resolvedHeaders,
           headers != null ? headers : {},
           this.getModelConfigHeaders(),
-          await resolve2(this.config.o11yHeaders)
+          await resolve2(this.config.o11yHeaders),
+          { accept: "text/event-stream" }
         ),
         body: {
           prompt,
@@ -45571,9 +45623,70 @@ var GatewayVideoModel = class {
           ...providerOptions && { providerOptions },
           ...image && { image: maybeEncodeVideoFile(image) }
         },
-        successfulResponseHandler: createJsonResponseHandler2(
-          gatewayVideoResponseSchema
-        ),
+        successfulResponseHandler: async ({
+          response,
+          url,
+          requestBodyValues
+        }) => {
+          if (response.body == null) {
+            throw new APICallError3({
+              message: "SSE response body is empty",
+              url,
+              requestBodyValues,
+              statusCode: response.status
+            });
+          }
+          const eventStream = parseJsonEventStream2({
+            stream: response.body,
+            schema: gatewayVideoEventSchema
+          });
+          const reader = eventStream.getReader();
+          const { done, value: parseResult } = await reader.read();
+          reader.releaseLock();
+          if (done || !parseResult) {
+            throw new APICallError3({
+              message: "SSE stream ended without a data event",
+              url,
+              requestBodyValues,
+              statusCode: response.status
+            });
+          }
+          if (!parseResult.success) {
+            throw new APICallError3({
+              message: "Failed to parse video SSE event",
+              cause: parseResult.error,
+              url,
+              requestBodyValues,
+              statusCode: response.status
+            });
+          }
+          const event = parseResult.value;
+          if (event.type === "error") {
+            throw new APICallError3({
+              message: event.message,
+              statusCode: event.statusCode,
+              url,
+              requestBodyValues,
+              responseHeaders: Object.fromEntries([...response.headers]),
+              responseBody: JSON.stringify(event),
+              data: {
+                error: {
+                  message: event.message,
+                  type: event.errorType,
+                  param: event.param
+                }
+              }
+            });
+          }
+          return {
+            value: {
+              videos: event.videos,
+              warnings: event.warnings,
+              providerMetadata: event.providerMetadata
+            },
+            responseHeaders: Object.fromEntries([...response.headers])
+          };
+        },
         failedResponseHandler: createJsonErrorResponseHandler2({
           errorSchema: z$2.any(),
           errorToMessage: (data) => data
@@ -45645,11 +45758,21 @@ var gatewayVideoWarningSchema = z$2.discriminatedUnion("type", [
     message: z$2.string()
   })
 ]);
-var gatewayVideoResponseSchema = z$2.object({
-  videos: z$2.array(gatewayVideoDataSchema),
-  warnings: z$2.array(gatewayVideoWarningSchema).optional(),
-  providerMetadata: z$2.record(z$2.string(), providerMetadataEntrySchema22).optional()
-});
+var gatewayVideoEventSchema = z$2.discriminatedUnion("type", [
+  z$2.object({
+    type: z$2.literal("result"),
+    videos: z$2.array(gatewayVideoDataSchema),
+    warnings: z$2.array(gatewayVideoWarningSchema).optional(),
+    providerMetadata: z$2.record(z$2.string(), providerMetadataEntrySchema22).optional()
+  }),
+  z$2.object({
+    type: z$2.literal("error"),
+    message: z$2.string(),
+    errorType: z$2.string(),
+    statusCode: z$2.number(),
+    param: z$2.unknown().nullable()
+  })
+]);
 var parallelSearchInputSchema = lazySchema(
   () => zodSchema3(
     z.object({
@@ -45826,7 +45949,7 @@ async function getVercelRequestId2() {
   var _a932;
   return (_a932 = (0, import_oidc3.getContext)().headers) == null ? void 0 : _a932["x-vercel-id"];
 }
-var VERSION5 = "3.0.52";
+var VERSION5 = "3.0.66";
 var AI_GATEWAY_PROTOCOL_VERSION2 = "0.0.1";
 function createGatewayProvider2(options = {}) {
   var _a932, _b92;
@@ -45869,13 +45992,18 @@ function createGatewayProvider2(options = {}) {
       settingValue: void 0,
       environmentVariableName: "VERCEL_REGION"
     });
+    const projectId = loadOptionalSetting2({
+      settingValue: void 0,
+      environmentVariableName: "VERCEL_PROJECT_ID"
+    });
     return async () => {
       const requestId = await getVercelRequestId2();
       return {
         ...deploymentId && { "ai-o11y-deployment-id": deploymentId },
         ...environment && { "ai-o11y-environment": environment },
         ...region && { "ai-o11y-region": region },
-        ...requestId && { "ai-o11y-request-id": requestId }
+        ...requestId && { "ai-o11y-request-id": requestId },
+        ...projectId && { "ai-o11y-project-id": projectId }
       };
     };
   };
@@ -46894,7 +47022,7 @@ function getTotalTimeoutMs(timeout) {
   }
   return timeout.totalMs;
 }
-var VERSION33 = "6.0.94";
+var VERSION33 = "6.0.116";
 var dataContentSchema3 = z$2.union([
   z$2.string(),
   z$2.instanceof(Uint8Array),
@@ -48444,6 +48572,25 @@ var updateWorkingMemoryTool = (memoryConfig) => {
         workingMemory = JSON.stringify(mergedData);
       } else {
         workingMemory = typeof inputData.memory === "string" ? inputData.memory : JSON.stringify(inputData.memory);
+        const existingRaw = await memory.getWorkingMemory({
+          threadId,
+          resourceId,
+          memoryConfig
+        });
+        if (existingRaw) {
+          const template = await memory.getWorkingMemoryTemplate({ memoryConfig });
+          if (template?.content) {
+            const normalizedNew = workingMemory.replace(/\s+/g, " ").trim();
+            const normalizedTemplate = template.content.replace(/\s+/g, " ").trim();
+            const normalizedExisting = existingRaw.replace(/\s+/g, " ").trim();
+            if (normalizedNew === normalizedTemplate && normalizedExisting !== normalizedTemplate) {
+              return {
+                success: false,
+                message: "Attempted to replace existing working memory with empty template. Update skipped to prevent data loss."
+              };
+            }
+          }
+        }
       }
       await memory.updateWorkingMemory({
         threadId,
@@ -48534,6 +48681,7 @@ function normalizeObservationalMemoryConfig(config) {
 var CHARS_PER_TOKEN = 4;
 var DEFAULT_MESSAGE_RANGE = { before: 1, after: 1 };
 var DEFAULT_TOP_K = 4;
+var VECTOR_DELETE_BATCH_SIZE = 100;
 var isZodObject = (v) => v instanceof ZodObject;
 var Memory = class extends MastraMemory {
   constructor(config = {}) {
@@ -48723,6 +48871,45 @@ var Memory = class extends MastraMemory {
   async deleteThread(threadId) {
     const memoryStore = await this.getMemoryStore();
     await memoryStore.deleteThread({ threadId });
+    if (this.vector) {
+      void this.deleteThreadVectors(threadId);
+    }
+  }
+  /**
+   * Lists all vector indexes that match the memory messages prefix.
+   * Handles separator differences across vector store backends (e.g. '_' vs '-').
+   */
+  async getMemoryVectorIndexes() {
+    if (!this.vector) return [];
+    const separator = this.vector.indexSeparator ?? "_";
+    const prefix = `memory${separator}messages`;
+    const indexes = await this.vector.listIndexes();
+    return indexes.filter((name21) => name21.startsWith(prefix));
+  }
+  /**
+   * Deletes all vector embeddings associated with a thread.
+   * This is called internally by deleteThread to clean up orphaned vectors.
+   *
+   * @param threadId - The ID of the thread whose vectors should be deleted
+   */
+  async deleteThreadVectors(threadId) {
+    try {
+      const memoryIndexes = await this.getMemoryVectorIndexes();
+      await Promise.all(
+        memoryIndexes.map(async (indexName) => {
+          try {
+            await this.vector.deleteVectors({
+              indexName,
+              filter: { thread_id: threadId }
+            });
+          } catch {
+            this.logger.debug(`Failed to delete vectors for thread ${threadId} in ${indexName}, skipping`);
+          }
+        })
+      );
+    } catch {
+      this.logger.debug(`Failed to clean up vectors for thread ${threadId}`);
+    }
   }
   async updateWorkingMemory({
     threadId,
@@ -48740,25 +48927,33 @@ var Memory = class extends MastraMemory {
         `Memory error: Resource-scoped working memory is enabled but no resourceId was provided. Either provide a resourceId or explicitly set workingMemory.scope to 'thread'.`
       );
     }
-    const memoryStore = await this.getMemoryStore();
-    if (scope === "resource" && resourceId) {
-      await memoryStore.updateResource({
-        resourceId,
-        workingMemory
-      });
-    } else {
-      const thread = await this.getThreadById({ threadId });
-      if (!thread) {
-        throw new Error(`Thread ${threadId} not found`);
-      }
-      await memoryStore.updateThread({
-        id: threadId,
-        title: thread.title || "",
-        metadata: {
-          ...thread.metadata,
+    const mutexKey = scope === "resource" ? `resource-${resourceId}` : `thread-${threadId}`;
+    const mutex = this.updateWorkingMemoryMutexes.has(mutexKey) ? this.updateWorkingMemoryMutexes.get(mutexKey) : new Mutex();
+    this.updateWorkingMemoryMutexes.set(mutexKey, mutex);
+    const release = await mutex.acquire();
+    try {
+      const memoryStore = await this.getMemoryStore();
+      if (scope === "resource" && resourceId) {
+        await memoryStore.updateResource({
+          resourceId,
           workingMemory
+        });
+      } else {
+        const thread = await this.getThreadById({ threadId });
+        if (!thread) {
+          throw new Error(`Thread ${threadId} not found`);
         }
-      });
+        await memoryStore.updateThread({
+          id: threadId,
+          title: thread.title || "",
+          metadata: {
+            ...thread.metadata,
+            workingMemory
+          }
+        });
+      }
+    } finally {
+      release();
     }
   }
   updateWorkingMemoryMutexes = /* @__PURE__ */ new Map();
@@ -48784,16 +48979,26 @@ var Memory = class extends MastraMemory {
       const existingWorkingMemory = await this.getWorkingMemory({ threadId, resourceId, memoryConfig }) || "";
       const template = await this.getWorkingMemoryTemplate({ memoryConfig });
       let reason = "";
+      const normalizeForComparison = (str) => str.replace(/\s+/g, " ").trim();
+      const normalizedNewMemory = normalizeForComparison(workingMemory);
+      const normalizedTemplate = template?.content ? normalizeForComparison(template.content) : "";
       if (existingWorkingMemory) {
         if (searchString && existingWorkingMemory?.includes(searchString)) {
           workingMemory = existingWorkingMemory.replace(searchString, workingMemory);
           reason = `found and replaced searchString with newMemory`;
-        } else if (existingWorkingMemory.includes(workingMemory) || template?.content?.trim() === workingMemory.trim()) {
+        } else if (existingWorkingMemory.includes(workingMemory) || template?.content?.trim() === workingMemory.trim() || // Also check normalized versions to catch template variations with different whitespace
+        normalizedNewMemory === normalizedTemplate) {
           return {
             success: false,
             reason: `attempted to insert duplicate data into working memory. this entry was skipped`
           };
         } else {
+          if (normalizedNewMemory === normalizedTemplate) {
+            return {
+              success: false,
+              reason: `attempted to append empty template to working memory. this entry was skipped`
+            };
+          }
           if (searchString) {
             reason = `attempted to replace working memory string that doesn't exist. Appending to working memory instead.`;
           } else {
@@ -48802,7 +49007,7 @@ var Memory = class extends MastraMemory {
           workingMemory = existingWorkingMemory + `
 ${workingMemory}`;
         }
-      } else if (workingMemory === template?.content) {
+      } else if (workingMemory === template?.content || normalizedNewMemory === normalizedTemplate) {
         return {
           success: false,
           reason: `try again when you have data to add. newMemory was equal to the working memory template`
@@ -48810,7 +49015,13 @@ ${workingMemory}`;
       } else {
         reason = `started new working memory`;
       }
-      workingMemory = template?.content ? workingMemory.replaceAll(template?.content, "") : workingMemory;
+      if (template?.content) {
+        workingMemory = workingMemory.replaceAll(template.content, "");
+        const templateWithUnixLineEndings = template.content.replace(/\r\n/g, "\n");
+        const templateWithWindowsLineEndings = template.content.replace(/\n/g, "\r\n");
+        workingMemory = workingMemory.replaceAll(templateWithUnixLineEndings, "");
+        workingMemory = workingMemory.replaceAll(templateWithWindowsLineEndings, "");
+      }
       const scope = config.workingMemory.scope || "resource";
       if (scope === "resource" && !resourceId) {
         throw new Error(
@@ -49286,24 +49497,25 @@ Notes:
         const messageIdsNeedingDeletion = /* @__PURE__ */ new Set([...messageIdsWithClearedContent, ...messageIdsWithNewEmbeddings]);
         if (messageIdsNeedingDeletion.size > 0) {
           try {
-            const indexes = await this.vector.listIndexes();
-            const memoryIndexes = indexes.filter((name21) => name21.startsWith("memory_messages"));
-            for (const indexName of memoryIndexes) {
-              for (const messageId of messageIdsNeedingDeletion) {
-                try {
-                  await this.vector.deleteVectors({
-                    indexName,
-                    filter: { message_id: messageId }
-                  });
-                } catch {
-                  this.logger.debug(
-                    `No existing vectors found for message ${messageId} in ${indexName}, skipping delete`
-                  );
+            const memoryIndexes = await this.getMemoryVectorIndexes();
+            const idsToDelete = [...messageIdsNeedingDeletion];
+            await Promise.all(
+              memoryIndexes.map(async (indexName) => {
+                for (let i = 0; i < idsToDelete.length; i += VECTOR_DELETE_BATCH_SIZE) {
+                  const batch = idsToDelete.slice(i, i + VECTOR_DELETE_BATCH_SIZE);
+                  try {
+                    await this.vector.deleteVectors({
+                      indexName,
+                      filter: { message_id: { $in: batch } }
+                    });
+                  } catch {
+                    this.logger.debug(`Failed to delete vector batch in ${indexName} (batch offset ${i}), skipping`);
+                  }
                 }
-              }
-            }
+              })
+            );
           } catch {
-            this.logger.debug(`No memory indexes found to delete from`);
+            this.logger.debug(`Failed to clean up old vectors during message update`);
           }
         }
         if (embeddingData.length > 0 && dimension !== void 0) {
@@ -49354,6 +49566,37 @@ Notes:
     }
     const memoryStore = await this.getMemoryStore();
     await memoryStore.deleteMessages(messageIds);
+    if (this.vector) {
+      void this.deleteMessageVectors(messageIds);
+    }
+  }
+  /**
+   * Deletes vector embeddings for specific messages.
+   * This is called internally by deleteMessages to clean up orphaned vectors.
+   *
+   * @param messageIds - The IDs of the messages whose vectors should be deleted
+   */
+  async deleteMessageVectors(messageIds) {
+    try {
+      const memoryIndexes = await this.getMemoryVectorIndexes();
+      await Promise.all(
+        memoryIndexes.map(async (indexName) => {
+          for (let i = 0; i < messageIds.length; i += VECTOR_DELETE_BATCH_SIZE) {
+            const batch = messageIds.slice(i, i + VECTOR_DELETE_BATCH_SIZE);
+            try {
+              await this.vector.deleteVectors({
+                indexName,
+                filter: { message_id: { $in: batch } }
+              });
+            } catch {
+              this.logger.debug(`Failed to delete vector batch in ${indexName} (batch offset ${i}), skipping`);
+            }
+          }
+        })
+      );
+    } catch {
+      this.logger.debug(`Failed to clean up vectors for deleted messages`);
+    }
   }
   /**
    * Clone a thread and its messages to create a new independent thread.
@@ -49768,7 +50011,7 @@ Notes:
         "Observational memory async buffering is enabled by default but the installed version of @mastra/core does not support it. Either upgrade @mastra/core, @mastra/memory, and your storage adapter (@mastra/libsql, @mastra/pg, or @mastra/mongodb) to the latest version, or explicitly disable async buffering by setting `observation: { bufferTokens: false }` in your observationalMemory config."
       );
     }
-    const { ObservationalMemory } = await import('./observational-memory-SR6G4HN5-PSFX73LD.mjs');
+    const { ObservationalMemory } = await import('./observational-memory-QFQUF5EY-GQK2OWVA.mjs');
     return new ObservationalMemory({
       storage: memoryStore,
       scope: omConfig.scope,

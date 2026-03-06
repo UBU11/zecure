@@ -3,11 +3,24 @@ services:
     build:
       context: ./src/app
       dockerfile: Dockerfile
+      args:
+        - VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
+        - VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}
+        - VITE_CLERK_PUBLISHABLE_KEY=${VITE_CLERK_PUBLISHABLE_KEY}
     container_name: zecure-frontend
     restart: unless-stopped
     expose:
       - "80"
     env_file: ./src/app/.env
+    develop:
+      watch:
+        - action: sync
+          path: ./src/app
+          target: /app
+          ignore:
+            - node_modules/
+        - action: rebuild
+          path: ./src/app/package.json
 
   backend:
     build:
@@ -22,6 +35,15 @@ services:
       - RABBITMQ_URL=amqp://rabbitmq:5672
       - MQTT_HOST=mqtt
       - MQTT_URL=mqtt://mqtt:1883
+    develop:
+      watch:
+        - action: sync
+          path: .
+          target: /usr/src/app
+          ignore:
+            - node_modules/
+        - action: rebuild
+          path: package.json
     depends_on:
       - rabbitmq
       - mqtt
@@ -54,3 +76,22 @@ services:
     depends_on:
       - frontend
       - backend
+
+  agent:
+    build:
+      context: ./agent
+      dockerfile: Dockerfile
+    container_name: zecure-agent
+    restart: unless-stopped
+    ports:
+      - "3005:3005"
+    env_file: ./agent/.env
+    develop:
+      watch:
+        - action: sync
+          path: ./agent/src
+          target: /usr/src/app/src
+          ignore:
+            - node_modules/
+        - action: rebuild
+          path: ./agent/package.json

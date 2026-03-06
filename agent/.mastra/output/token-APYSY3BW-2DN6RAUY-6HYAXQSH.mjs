@@ -7,7 +7,7 @@ import '@mastra/libsql';
 import '@mastra/memory';
 import '@mastra/observability';
 import '@mastra/core/agent';
-import './tools/70b17ec3-0ad0-4d28-84fa-248ab7dd1a0f.mjs';
+import './tools/3badb44b-df07-4ea0-bd01-21ad547d5fc3.mjs';
 import '@mastra/core/tools';
 import '@supabase/supabase-js';
 import 'zod';

@@ -12,7 +12,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { createStep, Workflow } from '@mastra/core/workflows';
 
-"use strict";
 const __dirname$1 = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname$1, "../../../../.env") });
 dotenv.config({ path: path.resolve(__dirname$1, "../../../../../.env") });
@@ -99,7 +98,6 @@ const energyTools = {
   persistAiInsights
 };
 
-"use strict";
 const energyAgent = new Agent({
   id: "energy-agent",
   name: "Energy AI Assistant",
@@ -126,7 +124,6 @@ const energyAgent = new Agent({
   memory: new Memory()
 });
 
-"use strict";
 const fetchUserDataStep = createStep({
   id: "fetchUserData",
   inputSchema: z.object({
@@ -232,7 +229,6 @@ const energyWorkflow = new Workflow({
   })
 }).then(fetchUserDataStep).then(analyzeAndGenerateStep).then(persistInsightsStep).commit();
 
-"use strict";
 const storage = new LibSQLStore({
   id: "mastra-storage",
   url: "file:./mastra.db"

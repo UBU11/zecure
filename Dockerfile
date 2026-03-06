@@ -1,27 +1,35 @@
-FROM oven/bun:1.1 AS builder
+FROM node:20-slim AS builder
 
 WORKDIR /usr/src/app
 
-COPY package.json bun.lock pnpm-lock.yaml ./
+# Install pnpm
+RUN npm install -g pnpm
 
-RUN bun install 
+COPY package.json pnpm-lock.yaml ./
+
+RUN pnpm install
 
 COPY . .
 
-FROM oven/bun:1.1 AS release
+RUN pnpm run node-build
+
+FROM node:20-slim AS release
 
 ENV NODE_ENV=production
 WORKDIR /usr/src/app
 
-COPY --from=builder /usr/src/app/package.json ./
-COPY --from=builder /usr/src/app/node_modules ./node_modules
-COPY --from=builder /usr/src/app/src ./src
-COPY --from=builder /usr/src/app/cert ./cert
 
-RUN mkdir -p src/data && chown -R bun:bun /usr/src/app
+RUN apt-get update && apt-get install -y libstdc++6 && rm -rf /var/lib/apt/lists/*
 
-USER bun
+RUN mkdir -p /usr/src/app/src/data && chown -R node:node /usr/src/app
+
+COPY --from=builder --chown=node:node /usr/src/app/package.json ./
+COPY --from=builder --chown=node:node /usr/src/app/node_modules ./node_modules
+COPY --from=builder --chown=node:node /usr/src/app/dist ./dist
+COPY --from=builder --chown=node:node /usr/src/app/cert ./cert
+
+USER node
 
 EXPOSE 3000
 
-CMD ["bun", "src/index.ts"]
+CMD ["npm", "run", "node-start"]
