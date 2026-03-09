@@ -17,7 +17,7 @@ interface MeterReading {
 }
 
 export async function startSupabaseWorker() {
-  const AMQP_URL    = process.env.RABBITMQ_URL ?? "amqp://localhost";
+  const AMQP_URL    =  "amqp://localhost";
   const QUEUE_NAME  = "meter_data";
   const SUPABASE_URL = "https://spryetddjmqrialeexih.supabase.co";
   const SUPABASE_KEY = process.env.SUPABASE_API;
@@ -80,7 +80,7 @@ export async function startSupabaseWorker() {
       const channel = await conn.createChannel();
 
       await channel.assertQueue(QUEUE_NAME, { durable: true });
-      channel.prefetch(1);   
+      channel.prefetch(1);
 
       console.log(`${TAG} Connected to RabbitMQ — consuming "${QUEUE_NAME}"`);
 
@@ -91,7 +91,7 @@ export async function startSupabaseWorker() {
 
         try {
           await processPayload(raw);
-          channel.ack(msg);                           
+          channel.ack(msg);
         } catch (err: any) {
           if (err.poison) {
             console.error(`${TAG} ☠ Poison message — discarding:`, err.message);

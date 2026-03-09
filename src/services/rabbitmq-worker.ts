@@ -9,12 +9,12 @@ const RECONNECT_MS = 5_000;
 let amqpChannel:  amqplib.Channel | null = null;
 let mqttClient:   MqttClient | null = null;
 let draining      = false;
-const pending: Buffer[] = []; 
+const pending: Buffer[] = [];
 
 export async function startRabbitMQWorker() {
-  const MQTT_URL   = process.env.MQTT_URL ?? "mqtt://localhost:1883";
+  const MQTT_URL   =  "mqtt://localhost:1883";
   const MQTT_TOPIC = "esp32/data";
-  const AMQP_URL   = process.env.RABBITMQ_URL ?? "amqp://localhost";
+  const AMQP_URL   =  "amqp://localhost";
   const QUEUE_NAME = "meter_data";
 
   async function connectRabbitMQ(): Promise<void> {
@@ -32,7 +32,7 @@ export async function startRabbitMQWorker() {
       amqpChannel = channel;
       draining    = false;
       console.log(`${TAG} RabbitMQ ready. Queue: "${QUEUE_NAME}"`);
-      
+
       // Start MQTT subscription after RabbitMQ is ready
       startMqtt();
 
