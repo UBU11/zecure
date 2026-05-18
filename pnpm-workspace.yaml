@@ -1,3 +1,7 @@
+packages:
+  - 'src/app'
+  - 'agent'
+
 ignoredBuiltDependencies:
   - '@sentry-internal/node-cpu-profiler'
   - esbuild

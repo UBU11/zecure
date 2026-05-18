@@ -33,9 +33,17 @@ app.post('/agents/:agentId/chat', async (req, res) => {
 
     
     const formattedMessages = (messages || []).map((m: any) => ({
-      role: m.role as 'user' | 'assistant',
+      role: m.role as 'user' | 'assistant' | 'system',
       content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
     }));
+
+    // Automatically provide the Clerk userId to the agent context so it doesn't have to ask or hallucinate
+    if (userId) {
+      formattedMessages.unshift({
+        role: 'system',
+        content: `IMPORTANT CONTEXT: The current logged-in user ID is "${userId}". You MUST use this exact ID automatically whenever calling tools like get_user_dashboard or persist_ai_insights. Do not ask the user for their ID.`
+      });
+    }
 
     const result = await agent.generate(formattedMessages, {
       threadId: threadId || `thread-${userId || 'anon'}`,

@@ -5,7 +5,7 @@ import "dotenv/config";
 import { decryptPayload } from "../utility/key";
 
 const TAG        = "[supabase-worker]";
-const RECONNECT_MS = 5_000;
+const RECONNECT_MS = 5000;
 
 interface MeterReading {
   device_id:    string;
@@ -17,7 +17,7 @@ interface MeterReading {
 }
 
 export async function startSupabaseWorker() {
-  const AMQP_URL    =  "amqp://localhost";
+  const AMQP_URL    = "amqp://localhost";
   const QUEUE_NAME  = "meter_data";
   const SUPABASE_URL = "https://spryetddjmqrialeexih.supabase.co";
   const SUPABASE_KEY = process.env.SUPABASE_API;

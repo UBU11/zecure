@@ -51,9 +51,12 @@ export const getUserDashboard = createTool({
   id: 'get_user_dashboard',
   description: 'Fetch the total usage and billing data for a specific user',
   inputSchema: z.object({
-    userId: z.string(),
+    userId: z.string().optional(),
   }),
   execute: async ({ userId }) => {
+    if (!userId || userId === 'unknown') {
+      return { message: "Error: No userId provided. Please ask the user to provide their account ID or user ID before fetching the dashboard." };
+    }
     console.log('Fetching dashboard for user:', userId);
     const { data, error } = await getSupabase()
       .from('user_dashboard')
@@ -65,7 +68,10 @@ export const getUserDashboard = createTool({
       console.error('Error fetching user dashboard:', error.message);
       throw new Error(error.message);
     }
-    console.log('Fetched dashboard data:', data ? 'Success' : 'Not found');
+    if (!data) {
+      console.log('No dashboard data found in Supabase.');
+    }
+    
     return data || { message: 'No dashboard data found for this user.' };
   },
 });
@@ -74,11 +80,14 @@ export const persistAiInsights = createTool({
   id: 'persist_ai_insights',
   description: 'Persist AI-generated insights (tips and peak alerts) to the user dashboard',
   inputSchema: z.object({
-    userId: z.string(),
-    tips: z.array(z.string()),
-    peakAlert: z.string(),
+    userId: z.string().optional(),
+    tips: z.array(z.string()).optional().default([]),
+    peakAlert: z.string().optional().default(""),
   }),
   execute: async ({ userId, tips, peakAlert }) => {
+    if (!userId || userId === 'unknown') {
+      return { success: false, message: 'No userId provided' };
+    }
     console.log('Persisting insights for user:', userId);
     try {
       const { error } = await getSupabase()

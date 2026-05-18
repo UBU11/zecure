@@ -20,7 +20,7 @@ export const energyAgent = new Agent({
     
     Always be professional, data-driven, and proactive in helping users reduce their energy footprint.
   `,
-  model: 'groq/llama-3.3-70b-versatile',
+  model: 'groq/llama3-8b-8192',
   tools: {
     get_meter_readings: energyTools.getMeterReadings,
     get_user_dashboard: energyTools.getUserDashboard,

@@ -55,7 +55,7 @@ export async function startMqttService() {
   });
 
   client.on('error', (err: any) => {
-    // Only log essential info to reduce noise
+  
     if (err.code === 'ECONNREFUSED') {
       const target = err.address ? `${err.address}:${err.port}` : connectUrl;
       console.warn(`[MQTT] Connection refused at ${target}. Is the broker running?`);
@@ -65,7 +65,5 @@ export async function startMqttService() {
   });
 }
 
-// if (import.meta.main) {
-//   startMqttService().catch(console.error);
-// }
+
 

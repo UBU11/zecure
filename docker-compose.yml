@@ -57,13 +57,15 @@ services:
       - "15672:15672"
 
   mqtt:
-    image: eclipse-mosquitto:latest
+    image: emqx:latest
     container_name: zecure-mqtt
     restart: unless-stopped
     ports:
       - "1883:1883"
-    volumes:
-      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf
+      - "8083:8083"
+      - "8084:8084"
+      - "8883:8883"
+      - "18083:18083"
 
   nginx:
     image: nginx:latest
