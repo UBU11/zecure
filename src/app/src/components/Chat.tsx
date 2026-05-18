@@ -82,9 +82,9 @@ const Chat: React.FC<ChatProps> = ({ userId }) => {
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0, opacity: 0 }}
             onClick={() => setIsOpen(true)}
-            className="w-16 h-16 bg-linear-to-tr from-purple-600 to-blue-500 rounded-full flex items-center justify-center shadow-2xl shadow-purple-500/40 hover:scale-110 transition-transform border border-white/20"
+            className="w-16 h-16 bg-[#c084fc] border-4 border-slate-900 rounded-none flex items-center justify-center neo-shadow-hover"
           >
-            <MessageSquare className="text-white w-8 h-8" />
+            <MessageSquare className="text-slate-900 w-8 h-8 stroke-[3px]" />
           </motion.button>
         )}
       </AnimatePresence>
@@ -92,40 +92,41 @@ const Chat: React.FC<ChatProps> = ({ userId }) => {
       <AnimatePresence>
         {isOpen && (
           <motion.div
-            initial={{ y: 100, opacity: 0, scale: 0.95 }}
-            animate={{ y: 0, opacity: 1, scale: 1 }}
-            exit={{ y: 100, opacity: 0, scale: 0.95 }}
-            className="w-[400px] h-[600px] glass-chat rounded-3xl overflow-hidden flex flex-col premium-shadow border border-white/10"
+            initial={{ y: 20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 20, opacity: 0 }}
+            transition={{ type: "spring", stiffness: 300, damping: 25 }}
+            className="w-[400px] h-[600px] bg-white border-4 border-slate-900 flex flex-col neo-shadow"
           >
            
-            <div className="p-5 bg-white/5 border-b border-white/10 flex items-center justify-between">
+            <div className="p-4 bg-[#f472b6] border-b-4 border-slate-900 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center border border-purple-500/40">
-                  <Bot className="text-purple-400 w-6 h-6" />
+                <div className="w-10 h-10 bg-white border-2 border-slate-900 flex items-center justify-center shadow-[2px_2px_0px_0px_rgba(15,23,42,1)]">
+                  <Bot className="text-slate-900 w-6 h-6 stroke-[3px]" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-white">Energy Assistant</h3>
-                  <p className="text-[10px] text-green-400 flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+                  <h3 className="font-black text-slate-900 uppercase tracking-wider">Energy Assistant</h3>
+                  <p className="text-[10px] font-bold text-slate-900 flex items-center gap-1 uppercase">
+                    <span className="w-2 h-2 bg-[#4ade80] border border-slate-900" />
                     Online
                   </p>
                 </div>
               </div>
               <button 
                 onClick={() => setIsOpen(false)}
-                className="p-2 hover:bg-white/10 rounded-full transition-colors"
+                className="p-1 bg-white border-2 border-slate-900 shadow-[2px_2px_0px_0px_rgba(15,23,42,1)] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all"
               >
-                <X className="text-slate-400 w-5 h-5" />
+                <X className="text-slate-900 w-5 h-5 stroke-[3px]" />
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-5 space-y-4 scrollbar-hide">
+            <div className="flex-1 overflow-y-auto p-5 space-y-4 bg-[#f4f0ec]">
               {messages.map((msg, i) => (
                 <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[80%] p-3 rounded-2xl text-sm ${
+                  <div className={`max-w-[85%] p-3 text-sm font-bold border-2 border-slate-900 shadow-[2px_2px_0px_0px_rgba(15,23,42,1)] ${
                     msg.role === 'user' 
-                      ? 'bg-purple-600 text-white rounded-tr-none' 
-                      : 'bg-white/5 border border-white/10 text-slate-200 rounded-tl-none'
+                      ? 'bg-[#c084fc] text-slate-900 rounded-none' 
+                      : 'bg-white text-slate-900 rounded-none'
                   }`}>
                     {msg.content}
                   </div>
@@ -133,8 +134,8 @@ const Chat: React.FC<ChatProps> = ({ userId }) => {
               ))}
               {isLoading && (
                 <div className="flex justify-start">
-                  <div className="bg-white/5 border border-white/10 p-3 rounded-2xl rounded-tl-none">
-                    <Loader2 className="w-4 h-4 text-purple-400 animate-spin" />
+                  <div className="bg-white border-2 border-slate-900 p-3 shadow-[2px_2px_0px_0px_rgba(15,23,42,1)]">
+                    <Loader2 className="w-5 h-5 text-slate-900 animate-spin stroke-[3px]" />
                   </div>
                 </div>
               )}
@@ -142,22 +143,22 @@ const Chat: React.FC<ChatProps> = ({ userId }) => {
             </div>
 
         
-            <div className="p-4 bg-white/5 border-t border-white/10">
-              <div className="relative">
+            <div className="p-4 bg-white border-t-4 border-slate-900">
+              <div className="relative flex gap-2">
                 <input
                   type="text"
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleSend()}
                   placeholder="Ask about your usage..."
-                  className="w-full bg-black/20 border border-white/10 rounded-full py-3 px-5 pr-12 text-sm focus:outline-none focus:border-purple-500/50 transition-colors"
+                  className="flex-1 bg-white border-2 border-slate-900 p-3 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#f472b6] shadow-[2px_2px_0px_0px_rgba(15,23,42,1)]"
                 />
                 <button
                   onClick={handleSend}
                   disabled={isLoading || !input.trim()}
-                  className="absolute right-2 top-1.5 p-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:hover:bg-purple-600 rounded-full transition-all"
+                  className="p-3 bg-[#c084fc] border-2 border-slate-900 shadow-[2px_2px_0px_0px_rgba(15,23,42,1)] disabled:opacity-50 active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all flex items-center justify-center"
                 >
-                  <Send className="w-4 h-4 text-white" />
+                  <Send className="w-5 h-5 text-slate-900 stroke-[3px] ml-1" />
                 </button>
               </div>
             </div>

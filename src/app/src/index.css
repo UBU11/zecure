@@ -2,25 +2,21 @@
 
 @layer base {
   :root {
-    --background: 240 10% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 240 10% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 240 10% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 263.4 70% 50.4%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 240 3.7% 15.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 240 3.7% 15.9%;
-    --muted-foreground: 240 5% 64.9%;
-    --accent: 240 3.7% 15.9%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 240 3.7% 15.9%;
-    --input: 240 3.7% 15.9%;
-    --ring: 263.4 70% 50.4%;
+    --background: 60 20% 97%; /* Light cream */
+    --foreground: 0 0% 9%; /* Almost black */
+    --card: 60 20% 97%;
+    --card-foreground: 0 0% 9%;
+    --popover: 60 20% 97%;
+    --popover-foreground: 0 0% 9%;
+    --primary: 280 80% 60%; /* Bright Purple */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 330 80% 60%; /* Bright Pink */
+    --secondary-foreground: 0 0% 100%;
+    --muted: 0 0% 85%;
+    --muted-foreground: 0 0% 40%;
+    --accent: 45 100% 50%; /* Bright Yellow */
+    --accent-foreground: 0 0% 9%;
+    --border: 0 0% 9%;
   }
 }
 
@@ -29,29 +25,47 @@
 }
 
 body {
-  @apply bg-[#030014] text-slate-200 overflow-x-hidden;
+  @apply bg-[#f4f0ec] text-slate-900 overflow-x-hidden;
   font-family: inherit;
+  background-image: radial-gradient(#d1cbbd 2px, transparent 2px);
+  background-size: 24px 24px;
 }
 
-.glass-card {
-  @apply bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl;
+/* Neo-Brutalism Base Classes */
+.neo-box {
+  @apply bg-white border-4 border-slate-900 rounded-none;
 }
 
-.gradient-text {
-  @apply bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-cyan-400;
+.neo-shadow {
+  box-shadow: 6px 6px 0px 0px rgba(15, 23, 42, 1);
 }
 
-.premium-shadow {
-  box-shadow: 0 0 50px -12px rgba(123, 31, 162, 0.3);
+.neo-shadow-hover {
+  box-shadow: 6px 6px 0px 0px rgba(15, 23, 42, 1);
+  transition: all 0.15s ease-out;
 }
 
-.glass-chat {
-  background: rgba(3, 0, 20, 0.7);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+.neo-shadow-hover:hover {
+  box-shadow: 2px 2px 0px 0px rgba(15, 23, 42, 1);
+  transform: translate(4px, 4px);
 }
 
+.neo-button {
+  @apply bg-purple-400 border-4 border-slate-900 text-slate-900 font-bold px-6 py-3 uppercase tracking-wider active:bg-purple-500 rounded-none inline-flex items-center justify-center;
+  box-shadow: 6px 6px 0px 0px rgba(15, 23, 42, 1);
+  transition: all 0.15s ease-out;
+}
 
+.neo-button:hover {
+  box-shadow: 2px 2px 0px 0px rgba(15, 23, 42, 1);
+  transform: translate(4px, 4px);
+}
+
+.neo-title {
+  @apply font-black tracking-tight uppercase border-b-4 border-slate-900 inline-block;
+}
+
+/* Hide Clerk Badges */
 .cl-internal-ph67as, 
 .cl-internal-17lyz7w, 
 .cl-internal-1u7e0nd,

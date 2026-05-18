@@ -34,6 +34,7 @@ export interface ConsumptionDataPoint {
 
 interface EnergyState {
   // ── Data ──
+  livePower: ConsumptionDataPoint[];
   dailyUsage: ConsumptionDataPoint[];
   weeklyUsage: ConsumptionDataPoint[];
   monthlyUsage: ConsumptionDataPoint[];
@@ -106,7 +107,8 @@ function generateEmptyChart(count: number, prefix: string): ConsumptionDataPoint
 function appendToChart(
   chart: ConsumptionDataPoint[],
   label: string,
-  kwh: number,
+  value: number,
+  accumulate = true,
 ): ConsumptionDataPoint[] {
   const updated = [...chart];
   const last = updated[updated.length - 1];
@@ -114,10 +116,10 @@ function appendToChart(
   if (last && last.label === label) {
     updated[updated.length - 1] = {
       ...last,
-      value: round4(last.value + kwh),
+      value: accumulate ? round4(last.value + value) : round4(value),
     };
   } else {
-    updated.push({ label, value: round4(kwh) });
+    updated.push({ label, value: round4(value) });
     updated.shift(); // maintain fixed window size
   }
 
@@ -182,17 +184,12 @@ async function upsertDashboard(
 }
 
 // ──────────────────────────────────────────────
-// Realtime Singleton Guard
-// ──────────────────────────────────────────────
-
-let realtimeStarted = false;
-
-// ──────────────────────────────────────────────
 // Store
 // ──────────────────────────────────────────────
 
 export const useEnergyStore = create<EnergyState>((set) => ({
   // ── Initial State ──
+  livePower: generateEmptyChart(30, 's'),
   dailyUsage: generateEmptyChart(MAX_HOURLY_POINTS, 'Hour'),
   weeklyUsage: generateEmptyChart(MAX_DAILY_POINTS, 'Day'),
   monthlyUsage: generateEmptyChart(30, 'Day'),
@@ -293,16 +290,21 @@ export const useEnergyStore = create<EnergyState>((set) => ({
    * and persists the snapshot back to Supabase.
    */
   startRealtime: () => {
-    if (realtimeStarted) {
-      console.log('[energyStore] Realtime already active — skipping');
-      return;
+    // Remove any existing energy channels first to avoid stale bindings
+    const existingChannels = supabase.getChannels();
+    for (const ch of existingChannels) {
+      if (ch.topic.includes('realtime-energy')) {
+        supabase.removeChannel(ch);
+      }
     }
-    realtimeStarted = true;
 
     console.log('[energyStore] Subscribing to Realtime…');
 
+    // Use a unique channel name to avoid server-side binding conflicts during HMR
+    const channelName = `realtime-energy-${Date.now()}`;
+
     supabase
-      .channel('realtime-energy')
+      .channel(channelName)
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'meter_readings' },
@@ -323,14 +325,19 @@ export const useEnergyStore = create<EnergyState>((set) => ({
           const recordedAt = new Date(row.recorded_at as string);
           const hourLabel = getHourLabel(recordedAt);
           const dayLabel = getDayLabel(recordedAt);
+          const secLabel = recordedAt.toLocaleTimeString([], { hour12: false });
 
           set((state) => {
+            // Live power tracks raw W instead of accumulated kWh, so accumulate = false
+            const newLive = appendToChart(state.livePower, secLabel, power, false);
+            
             const newDaily = appendToChart(state.dailyUsage, hourLabel, kwh);
             const newWeekly = appendToChart(state.weeklyUsage, dayLabel, kwh);
             const newTotal = state.totalConsumption + kwh;
             const billing = calculateBilling(newTotal);
 
             return {
+              livePower: newLive,
               dailyUsage: newDaily,
               weeklyUsage: newWeekly,
               totalConsumption: newTotal,
@@ -355,12 +362,10 @@ export const useEnergyStore = create<EnergyState>((set) => ({
             break;
           case 'CHANNEL_ERROR':
             console.error('[energyStore] Realtime channel error:', err);
-            realtimeStarted = false;
             set({ isLive: false });
             break;
           case 'TIMED_OUT':
             console.warn('[energyStore] Realtime timed out — will retry');
-            realtimeStarted = false;
             set({ isLive: false });
             break;
           default:

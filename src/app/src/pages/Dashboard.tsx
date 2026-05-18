@@ -10,7 +10,7 @@ import Chat from '../components/Chat';
 
 const Dashboard: React.FC = () => {
   const { user } = useUser();
-  const { dailyUsage, weeklyUsage, currentBill, totalConsumption, projectedBill, currency, refreshData, startRealtime, isLive, lastUpdated, setUserId } = useEnergyStore();
+  const { livePower, dailyUsage, weeklyUsage, currentBill, totalConsumption, projectedBill, currency, refreshData, startRealtime, isLive, lastUpdated, setUserId } = useEnergyStore();
   const navigate = useNavigate();
   //refreshes every second
   const [, setTick] = useState(0);
@@ -65,65 +65,73 @@ const Dashboard: React.FC = () => {
         startRealtime();
       });
     }
-    
+
     return () => {
-      import('../lib/supabase').then(({ supabase }) => supabase.removeAllChannels());
+      // Only remove energy channels, not all channels
+      import('../lib/supabase').then(({ supabase }) => {
+        const channels = supabase.getChannels();
+        for (const ch of channels) {
+          if (ch.topic.includes('realtime-energy')) {
+            supabase.removeChannel(ch);
+          }
+        }
+      });
     };
   }, [user?.id, setUserId]);
 
   return (
-    <div className="min-h-screen bg-[#030014] text-white p-6 md:p-10">
-      <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-4">
-        <motion.div 
+    <div className="min-h-screen p-6 md:p-10">
+      <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center mb-12 gap-4">
+        <motion.div
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
         >
-          <button 
+          <button
             onClick={() => navigate('/')}
-            className="flex items-center gap-2 text-slate-400 hover:text-white mb-2 transition-colors"
+            className="flex items-center gap-2 text-slate-900 hover:text-purple-600 mb-4 transition-colors font-bold uppercase tracking-widest text-sm"
           >
-            <ArrowLeft className="w-4 h-4" /> Back to Home
+            <ArrowLeft className="w-5 h-5 stroke-[3px]" /> Back to Home
           </button>
-          <h1 className="text-4xl font-bold gradient-text">Smart Energy Dashboard</h1>
-          <div className="flex items-center gap-3 mt-1">
-            <p className="text-slate-400">Real-time monitoring and analytics</p>
-            <span className={`inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-xs font-semibold ${
+          <h1 className="text-5xl font-black text-slate-900 uppercase tracking-tighter mb-2">Smart Energy</h1>
+          <div className="flex items-center gap-3">
+            <p className="text-slate-700 font-bold uppercase tracking-widest text-sm">Dashboard</p>
+            <span className={`inline-flex items-center gap-1.5 px-3 py-1 border-2 border-slate-900 text-xs font-black uppercase tracking-widest shadow-[2px_2px_0px_0px_rgba(15,23,42,1)] ${
               isLive
-                ? 'bg-green-500/15 text-green-400 border border-green-500/30'
-                : 'bg-slate-700/40 text-slate-500 border border-slate-600/30'
+                ? 'bg-[#4ade80] text-slate-900'
+                : 'bg-slate-300 text-slate-600'
             }`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${
-                isLive ? 'bg-green-400 animate-pulse' : 'bg-slate-500'
+              <span className={`w-2 h-2 border border-slate-900 ${
+                isLive ? 'bg-white animate-pulse' : 'bg-slate-500'
               }`} />
               {isLive ? 'Live' : 'Offline'}
             </span>
             {formattedTime && (
-              <span className="text-xs text-slate-500">Updated {formattedTime}</span>
+              <span className="text-xs font-bold text-slate-500">Updated {formattedTime}</span>
             )}
           </div>
         </motion.div>
-        
-        <motion.div 
+
+        <motion.div
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
           className="flex items-center gap-6"
         >
-          <button 
+          <button
             onClick={() => { refreshData(); if (user?.id) fetchInsights(user.id); }}
-            className="px-6 py-2 bg-purple-600 hover:bg-purple-700 rounded-full font-medium transition-all shadow-lg hover:shadow-purple-500/20"
+            className="neo-button"
           >
             Refresh Data
           </button>
-          
-          <div className="p-1 glass-card rounded-full premium-shadow flex items-center justify-center border border-white/10">
-            <UserButton 
+
+          <div className="p-1 bg-white border-4 border-slate-900 rounded-none shadow-[4px_4px_0px_0px_rgba(15,23,42,1)] flex items-center justify-center">
+            <UserButton
               appearance={{
                 elements: {
-                  userButtonAvatarBox: "w-9 h-9",
-                  userButtonPopoverCard: "bg-[#030014] border border-white/10 shadow-2xl rounded-2xl",
-                  userButtonPopoverActionButtonText: "text-white font-medium",
-                  userButtonPopoverActionButtonIcon: "text-purple-400",
-                  userButtonOuterIdentifier: "text-white font-bold",
+                  userButtonAvatarBox: "w-10 h-10 rounded-none border-2 border-slate-900",
+                  userButtonPopoverCard: "bg-white border-4 border-slate-900 shadow-[8px_8px_0px_0px_rgba(15,23,42,1)] rounded-none",
+                  userButtonPopoverActionButtonText: "text-slate-900 font-bold uppercase",
+                  userButtonPopoverActionButtonIcon: "text-slate-900",
+                  userButtonOuterIdentifier: "text-slate-900 font-black",
                   clerkLogoBox: "hidden",
                   developmentBadge: "hidden",
                 }
@@ -133,37 +141,37 @@ const Dashboard: React.FC = () => {
         </motion.div>
       </div>
 
-      <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+      <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-          <BillCard 
-            title="Current Bill" 
-            value={`${currency}${currentBill.toFixed(2)}`} 
+          <BillCard
+            title="Current Bill"
+            value={`${currency}${currentBill.toFixed(2)}`}
             subValue="For the current period"
             icon={DollarSign}
             trend="up"
           />
         </motion.div>
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-          <BillCard 
-            title="Total Usage" 
-            value={`${totalConsumption.toFixed(1)} kWh`} 
+          <BillCard
+            title="Total Usage"
+            value={`${totalConsumption.toFixed(1)} kWh`}
             subValue="32% higher than last month"
             icon={Zap}
             trend="up"
           />
         </motion.div>
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-          <BillCard 
-            title="Projected Bill" 
-            value={`${currency}${projectedBill.toFixed(2)}`} 
+          <BillCard
+            title="Projected Bill"
+            value={`${currency}${projectedBill.toFixed(2)}`}
             subValue="Based on current patterns"
             icon={FileText}
           />
         </motion.div>
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
-          <BillCard 
-            title="System Status" 
-            value="Optimal" 
+          <BillCard
+            title="System Status"
+            value="Optimal"
             subValue="All sensors active"
             icon={Activity}
             trend="down"
@@ -171,80 +179,89 @@ const Dashboard: React.FC = () => {
         </motion.div>
       </div>
 
-      
-      <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <motion.div 
+
+      <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8 mb-20">
+        <motion.div
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.5 }}
           className="lg:col-span-2 space-y-8"
         >
-          <UsageChart 
-            data={dailyUsage} 
-            title="Daily Power Consumption" 
-            subTitle="Hourly usage in kWh"
+          <UsageChart
+            data={livePower}
+            title="Live System Draw"
+            subTitle="Real-time high-frequency power readings (Watts)"
             type="splinearea"
           />
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-             <div className="glass-card p-6 min-h-[150px] flex items-center justify-center">
-                <p className="text-slate-500 italic"></p>
+
+          <UsageChart
+            data={dailyUsage}
+            title="Daily Power Consumption"
+            subTitle="Hourly usage accumulation in kWh"
+            type="column2d"
+          />
+
+          {/* <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+             <div className="neo-box neo-shadow p-6 min-h-[150px] flex items-center justify-center bg-[#fbbf24]">
+                <p className="text-slate-900 font-black uppercase tracking-widest text-xl text-center">Energy Saving Mode Active</p>
              </div>
-             <div className={`glass-card p-6 min-h-[150px] flex flex-col items-center justify-center border ${insights.peakAlert !== 'Normal' ? 'border-amber-500/50 bg-amber-500/5' : 'border-white/10'}`}>
-                <Activity className={`w-8 h-8 mb-2 ${insights.peakAlert !== 'Normal' ? 'text-amber-400' : 'text-slate-500'}`} />
-                <p className={`text-center font-medium ${insights.peakAlert !== 'Normal' ? 'text-amber-200' : 'text-slate-400'}`}>
+             <div className={`neo-box neo-shadow p-6 min-h-[150px] flex flex-col items-center justify-center ${insights.peakAlert !== 'Normal' ? 'bg-[#f472b6]' : 'bg-[#4ade80]'}`}>
+                <Activity className={`w-10 h-10 mb-2 stroke-[3px] text-slate-900`} />
+                <p className={`text-center font-black uppercase tracking-wider text-slate-900`}>
                   {insights.peakAlert}
                 </p>
-                {insights.peakAlert === 'Normal' && <p className="text-xs text-slate-500 mt-1">No unusual spikes detected</p>}
+                {insights.peakAlert === 'Normal' && <p className="text-sm font-bold text-slate-900 mt-2 border-2 border-slate-900 p-1 bg-white shadow-[2px_2px_0px_0px_rgba(15,23,42,1)]">No unusual spikes detected</p>}
              </div>
-          </div>
+          </div> */}
         </motion.div>
 
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.6 }}
-          className="space-y-6"
+          className="space-y-8"
         >
-          <div className="glass-card p-6">
-            <h3 className="text-xl font-bold mb-4">Weekly Overview</h3>
-             <UsageChart 
-                data={weeklyUsage} 
-                title="" 
+          <div className="neo-box neo-shadow p-6 bg-white">
+            <h3 className="text-2xl neo-title mb-4">Weekly Overview</h3>
+             <UsageChart
+                data={weeklyUsage}
+                title=""
                 subTitle=""
                 type="column2d"
               />
           </div>
-          
-          <div className="glass-card p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xl font-bold">Quick Tips</h3>
+
+          <div className="neo-box neo-shadow p-6 bg-[#c084fc]">
+            <div className="flex items-center justify-between mb-6 border-b-4 border-slate-900 pb-4">
+              <h3 className="text-2xl font-black uppercase tracking-tighter text-slate-900">Quick Tips</h3>
               {user?.id && (
                 <button
                   onClick={() => fetchInsights(user.id!)}
                   disabled={insights.loading}
-                  className="text-xs text-purple-400 hover:text-purple-300 disabled:opacity-50 transition-colors"
+                  className="p-2 bg-white border-2 border-slate-900 shadow-[2px_2px_0px_0px_rgba(15,23,42,1)] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all disabled:opacity-50"
                 >
-                  {insights.loading ? '⟳ Loading…' : '↺ Refresh'}
+                  <span className="font-bold uppercase text-xs">
+                    {insights.loading ? 'Loading...' : 'Refresh'}
+                  </span>
                 </button>
               )}
             </div>
             {insights.loading ? (
-              <div className="flex items-center gap-2 text-slate-500 text-sm py-4">
-                <div className="w-4 h-4 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
-                Generating AI insights…
+              <div className="flex items-center gap-3 text-slate-900 font-bold uppercase tracking-widest py-4">
+                <div className="w-5 h-5 border-4 border-slate-900 border-t-transparent rounded-full animate-spin" />
+                Generating...
               </div>
             ) : (
-              <ul className="space-y-4 text-sm text-slate-400">
+              <ul className="space-y-4 text-sm text-slate-900 font-bold">
                 {insights.tips.length > 0 ? (
                   insights.tips.map((tip, i) => (
-                    <li key={i} className="flex gap-2">
-                      <div className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${i % 2 === 0 ? 'bg-cyan-400' : 'bg-purple-400'}`} />
+                    <li key={i} className="flex gap-3 items-start bg-white p-3 border-2 border-slate-900 shadow-[2px_2px_0px_0px_rgba(15,23,42,1)]">
+                      <div className={`w-3 h-3 border-2 border-slate-900 mt-1 shrink-0 ${i % 2 === 0 ? 'bg-[#4ade80]' : 'bg-[#fbbf24]'}`} />
                       {tip}
                     </li>
                   ))
                 ) : (
-                  <li className="italic text-slate-500">No tips available. Click Refresh to generate.</li>
+                  <li className="font-black uppercase tracking-widest">No tips available. Click Refresh to generate.</li>
                 )}
               </ul>
             )}
