@@ -28,15 +28,16 @@ export const getMeterReadings = createTool({
   id: 'get_meter_readings',
   description: 'Fetch the latest meter readings for a specific device',
   inputSchema: z.object({
-    limit: z.number().optional().default(10),
+    limit: z.number().describe('The number of meter readings to fetch. Always provide a value, typically 10 or 20.'),
   }),
   execute: async ({ limit }) => {
-    console.log('Fetching meter readings with limit:', limit);
+    const queryLimit = limit ?? 10;
+    console.log('Fetching meter readings with limit:', queryLimit);
     const { data, error } = await getSupabase()
       .from('meter_readings')
       .select('*')
       .order('recorded_at', { ascending: false })
-      .limit(limit);
+      .limit(queryLimit);
 
     if (error) {
       console.error('Error fetching meter readings:', error.message);
@@ -51,7 +52,7 @@ export const getUserDashboard = createTool({
   id: 'get_user_dashboard',
   description: 'Fetch the total usage and billing data for a specific user',
   inputSchema: z.object({
-    userId: z.string().optional(),
+    userId: z.string().describe('The user ID to fetch the dashboard for. Always provide this if known, or "unknown" if not.'),
   }),
   execute: async ({ userId }) => {
     if (!userId || userId === 'unknown') {
@@ -80,9 +81,9 @@ export const persistAiInsights = createTool({
   id: 'persist_ai_insights',
   description: 'Persist AI-generated insights (tips and peak alerts) to the user dashboard',
   inputSchema: z.object({
-    userId: z.string().optional(),
-    tips: z.array(z.string()).optional().default([]),
-    peakAlert: z.string().optional().default(""),
+    userId: z.string().describe('The user ID to persist insights for.'),
+    tips: z.array(z.string()).describe('An array of AI-generated tips.'),
+    peakAlert: z.string().describe('An AI-generated peak alert message.'),
   }),
   execute: async ({ userId, tips, peakAlert }) => {
     if (!userId || userId === 'unknown') {
