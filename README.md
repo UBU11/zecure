@@ -101,4 +101,3 @@ pnpm run build
 - **UI Design**: A strict Neo-Brutalist design language, using custom tokens over generic utilities.
 - **State Management**: `zustand` for client-side state.
 
-Please refer to `AGENTS.md` for in-depth technical guidelines and conventions.
